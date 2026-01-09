@@ -1,7 +1,7 @@
 "use client";
 
 import { SignIn } from "@clerk/nextjs";
-import { Sparkles } from "lucide-react";
+import { Tornado } from "lucide-react";
 import Link from "next/link";
 
 export default function SignInPage() {
@@ -17,8 +17,8 @@ export default function SignInPage() {
 			{/* Header */}
 			<header className="relative z-10 p-6">
 				<Link href="/" className="flex items-center gap-2 w-fit">
-					<div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 via-indigo-500 to-cyan-500 flex items-center justify-center">
-						<Sparkles className="w-5 h-5 text-white" />
+					<div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center">
+						<Tornado className="w-5 h-5 text-white" />
 					</div>
 					<span className="text-xl font-bold text-white">Whirl</span>
 				</Link>

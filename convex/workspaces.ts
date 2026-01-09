@@ -13,6 +13,7 @@ const workspaceTodoStatus = v.union(
 	v.literal("backlog"),
 	v.literal("todo"),
 	v.literal("in_progress"),
+	v.literal("in_review"),
 	v.literal("done"),
 );
 
@@ -650,7 +651,9 @@ export const listWorkspaceTodos = query({
 			description: v.optional(v.string()),
 			status: workspaceTodoStatus,
 			assignee: v.optional(v.union(v.literal("user"), v.literal("agent"))),
+			agentType: v.optional(v.literal("cursor")),
 			agentPrompt: v.optional(v.string()),
+			currentAgentRunId: v.optional(v.id("agent_runs")),
 			order: v.optional(v.number()),
 			userId: v.id("users"),
 			createdAt: v.number(),

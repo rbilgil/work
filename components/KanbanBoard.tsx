@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bot, GripVertical, Plus } from "lucide-react";
+import { Bot, ExternalLink, GitPullRequest, GripVertical, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 
-type Status = "backlog" | "todo" | "in_progress" | "done";
+type Status = "backlog" | "todo" | "in_progress" | "in_review" | "done";
 
 type Todo = {
 	_id: Id<"workspace_todos">;
@@ -23,7 +23,9 @@ type Todo = {
 	status: Status;
 	order?: number;
 	assignee?: "user" | "agent";
+	agentType?: "cursor";
 	agentPrompt?: string;
+	currentAgentRunId?: Id<"agent_runs">;
 };
 
 const COLUMNS: { id: Status; label: string; color: string }[] = [
@@ -33,6 +35,11 @@ const COLUMNS: { id: Status; label: string; color: string }[] = [
 		id: "in_progress",
 		label: "In Progress",
 		color: "bg-amber-50 dark:bg-amber-900/20",
+	},
+	{
+		id: "in_review",
+		label: "In Review",
+		color: "bg-purple-50 dark:bg-purple-900/20",
 	},
 	{ id: "done", label: "Done", color: "bg-green-50 dark:bg-green-900/20" },
 ];
@@ -129,6 +136,36 @@ export default function KanbanBoard({
 		}
 	};
 
+	const getAgentStatusLabel = (todo: Todo) => {
+		if (todo.assignee !== "agent") return null;
+
+		if (todo.status === "in_progress" && todo.currentAgentRunId) {
+			return (
+				<span className="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400">
+					<Bot className="w-3 h-3" />
+					<span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+					Agent Working
+				</span>
+			);
+		}
+
+		if (todo.status === "in_review") {
+			return (
+				<span className="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400">
+					<GitPullRequest className="w-3 h-3" />
+					PR Ready
+				</span>
+			);
+		}
+
+		return (
+			<span className="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400">
+				<Bot className="w-3 h-3" />
+				Queued for Agent
+			</span>
+		);
+	};
+
 	return (
 		<div className="flex gap-4 h-full overflow-x-auto p-4 bg-slate-50/50 dark:bg-slate-900/50">
 			{COLUMNS.map((column) => (
@@ -145,6 +182,9 @@ export default function KanbanBoard({
 					<div className="flex items-center justify-between mb-3">
 						<h3 className="font-semibold text-sm flex items-center gap-2">
 							{column.label}
+							{column.id === "in_review" && (
+								<GitPullRequest className="w-3.5 h-3.5 text-purple-500" />
+							)}
 							<span className="text-xs opacity-60 bg-white/50 dark:bg-black/20 px-1.5 py-0.5 rounded">
 								{todosByColumn[column.id].length}
 							</span>
@@ -168,47 +208,15 @@ export default function KanbanBoard({
 					>
 						<AnimatePresence mode="popLayout">
 							{todosByColumn[column.id].map((todo) => (
-								<motion.div
+								<TodoCard
 									key={todo._id}
-									layout
-									initial={{ opacity: 0, scale: 0.9 }}
-									animate={{ opacity: 1, scale: 1 }}
-									exit={{ opacity: 0, scale: 0.9 }}
-									draggable
-									onDragStart={(e) =>
-										handleDragStart(e as unknown as React.DragEvent, todo)
-									}
+									todo={todo}
+									isDragging={draggedItem?._id === todo._id}
+									agentStatusLabel={getAgentStatusLabel(todo)}
+									onDragStart={(e) => handleDragStart(e, todo)}
 									onDragEnd={() => setDraggedItem(null)}
 									onClick={() => onTaskClick?.(todo)}
-									className={cn(
-										"p-3 bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200/70 dark:border-white/10 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow",
-										draggedItem?._id === todo._id && "opacity-50",
-										todo.assignee === "agent" &&
-											"border-l-2 border-l-purple-500",
-									)}
-								>
-									<div className="flex items-start gap-2">
-										<GripVertical className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
-										<div className="flex-1 min-w-0">
-											<p className="text-sm font-medium truncate">
-												{todo.title}
-											</p>
-											{todo.description && (
-												<p className="text-xs text-slate-500 mt-1 line-clamp-2">
-													{todo.description.slice(0, 100)}
-													{todo.description.length > 100 ? "..." : ""}
-												</p>
-											)}
-											{todo.assignee === "agent" && (
-												<span className="inline-flex items-center gap-1 mt-2 text-xs text-purple-600 dark:text-purple-400">
-													<Bot className="w-3 h-3" />
-													<span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
-													Queued for Agent
-												</span>
-											)}
-										</div>
-									</div>
-								</motion.div>
+								/>
 							))}
 						</AnimatePresence>
 
@@ -262,5 +270,89 @@ export default function KanbanBoard({
 				</DialogContent>
 			</Dialog>
 		</div>
+	);
+}
+
+interface TodoCardProps {
+	todo: Todo;
+	isDragging: boolean;
+	agentStatusLabel: React.ReactNode;
+	onDragStart: (e: React.DragEvent) => void;
+	onDragEnd: () => void;
+	onClick: () => void;
+}
+
+function TodoCard({
+	todo,
+	isDragging,
+	agentStatusLabel,
+	onDragStart,
+	onDragEnd,
+	onClick,
+}: TodoCardProps) {
+	// Query for agent run info if there's a current run
+	const agentRun = useQuery(
+		api.agentExecutionMutations.getAgentRunForTodo,
+		todo.currentAgentRunId ? { todoId: todo._id } : "skip",
+	);
+
+	return (
+		<motion.div
+			layout
+			initial={{ opacity: 0, scale: 0.9 }}
+			animate={{ opacity: 1, scale: 1 }}
+			exit={{ opacity: 0, scale: 0.9 }}
+			draggable
+			onDragStart={(e) => onDragStart(e as unknown as React.DragEvent)}
+			onDragEnd={onDragEnd}
+			onClick={onClick}
+			className={cn(
+				"p-3 bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200/70 dark:border-white/10 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow",
+				isDragging && "opacity-50",
+				todo.assignee === "agent" && "border-l-2 border-l-purple-500",
+				todo.agentType === "cursor" && "ring-1 ring-purple-200 dark:ring-purple-800",
+			)}
+		>
+			<div className="flex items-start gap-2">
+				<GripVertical className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
+				<div className="flex-1 min-w-0">
+					<p className="text-sm font-medium truncate">{todo.title}</p>
+					{todo.description && (
+						<p className="text-xs text-slate-500 mt-1 line-clamp-2">
+							{todo.description.slice(0, 100)}
+							{todo.description.length > 100 ? "..." : ""}
+						</p>
+					)}
+
+					{/* Agent status and PR link */}
+					<div className="flex items-center gap-2 mt-2 flex-wrap">
+						{agentStatusLabel}
+
+						{/* PR Badge */}
+						{agentRun?.prUrl && (
+							<a
+								href={agentRun.prUrl}
+								target="_blank"
+								rel="noopener noreferrer"
+								onClick={(e) => e.stopPropagation()}
+								className={cn(
+									"inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full",
+									agentRun.prStatus === "merged"
+										? "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300"
+										: agentRun.prStatus === "closed"
+											? "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300"
+											: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
+								)}
+							>
+								<GitPullRequest className="w-3 h-3" />
+								#{agentRun.prNumber}
+								{agentRun.prStatus === "merged" && " merged"}
+								<ExternalLink className="w-2.5 h-2.5" />
+							</a>
+						)}
+					</div>
+				</div>
+			</div>
+		</motion.div>
 	);
 }

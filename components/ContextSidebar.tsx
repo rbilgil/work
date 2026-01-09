@@ -3,8 +3,10 @@ import {
 	Bot,
 	CheckSquare,
 	FileText,
+	GitBranch,
 	LayoutGrid,
 	Link as LinkIcon,
+	Settings,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -13,12 +15,13 @@ import type { Id } from "../convex/_generated/dataModel";
 import ContextSection from "./ContextSection";
 import DocCreateModal from "./DocCreateModal";
 import DocItem from "./DocItem";
+import IntegrationsModal from "./IntegrationsModal";
 import LinkCreateModal from "./LinkCreateModal";
 import LinkItem from "./LinkItem";
 import TaskCreateModal from "./TaskCreateModal";
 import WorkspaceTodoItem from "./WorkspaceTodoItem";
 
-type Status = "backlog" | "todo" | "in_progress" | "done";
+type Status = "backlog" | "todo" | "in_progress" | "in_review" | "done";
 
 type Todo = {
 	_id: Id<"workspace_todos">;
@@ -27,7 +30,9 @@ type Todo = {
 	status: Status;
 	order?: number;
 	assignee?: "user" | "agent";
+	agentType?: "cursor";
 	agentPrompt?: string;
+	currentAgentRunId?: Id<"agent_runs">;
 };
 
 interface ContextSidebarProps {
@@ -44,23 +49,52 @@ export default function ContextSidebar({
 	const docs = useQuery(api.workspaces.listDocs, { workspaceId });
 	const todos = useQuery(api.workspaces.listWorkspaceTodos, { workspaceId });
 	const links = useQuery(api.workspaces.listLinks, { workspaceId });
+	const workspaceRepo = useQuery(api.integrations.getWorkspaceRepo, {
+		workspaceId,
+	});
 
 	const [docModalOpen, setDocModalOpen] = useState(false);
 	const [linkModalOpen, setLinkModalOpen] = useState(false);
 	const [taskModalOpen, setTaskModalOpen] = useState(false);
+	const [settingsOpen, setSettingsOpen] = useState(false);
 
 	// Get tasks assigned to agent that are in progress
 	const agentTasks =
 		(todos as Todo[] | undefined)?.filter(
-			(t) => t.assignee === "agent" && t.status === "in_progress",
+			(t) =>
+				t.assignee === "agent" &&
+				(t.status === "in_progress" || t.status === "in_review"),
 		) ?? [];
 
 	return (
 		<div className="w-72 flex-shrink-0 border-l border-slate-200/70 dark:border-white/10 bg-slate-50/50 dark:bg-slate-900/50 overflow-y-auto">
 			<div className="p-4">
-				<h2 className="text-sm font-semibold opacity-70 uppercase tracking-wider mb-4">
-					Added Context
-				</h2>
+				<div className="flex items-center justify-between mb-4">
+					<h2 className="text-sm font-semibold opacity-70 uppercase tracking-wider">
+						Added Context
+					</h2>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="h-6 w-6"
+						onClick={() => setSettingsOpen(true)}
+						title="Workspace Settings"
+					>
+						<Settings className="w-3.5 h-3.5" />
+					</Button>
+				</div>
+
+				{/* Connected Repo Indicator */}
+				{workspaceRepo && (
+					<div className="mb-4 p-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200/50 dark:border-green-500/20">
+						<div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-300">
+							<GitBranch className="w-3.5 h-3.5" />
+							<span className="font-medium truncate">
+								{workspaceRepo.owner}/{workspaceRepo.repo}
+							</span>
+						</div>
+					</div>
+				)}
 
 				{/* Documents Section */}
 				<ContextSection
@@ -149,17 +183,31 @@ export default function ContextSidebar({
 					{agentTasks.length === 0 ? (
 						<div className="py-2">
 							<p className="text-xs text-slate-500 mb-3">
-								All agents are idle and ready
+								{workspaceRepo
+									? "All agents are idle and ready"
+									: "Connect a GitHub repo to use agents"}
 							</p>
-							<Button
-								variant="outline"
-								size="sm"
-								className="w-full gap-2"
-								onClick={onGoToBoard}
-							>
-								<LayoutGrid className="w-3.5 h-3.5" />
-								Go to Board to assign tasks
-							</Button>
+							{workspaceRepo ? (
+								<Button
+									variant="outline"
+									size="sm"
+									className="w-full gap-2"
+									onClick={onGoToBoard}
+								>
+									<LayoutGrid className="w-3.5 h-3.5" />
+									Go to Board to assign tasks
+								</Button>
+							) : (
+								<Button
+									variant="outline"
+									size="sm"
+									className="w-full gap-2"
+									onClick={() => setSettingsOpen(true)}
+								>
+									<GitBranch className="w-3.5 h-3.5" />
+									Connect Repository
+								</Button>
+							)}
 						</div>
 					) : (
 						<div className="space-y-2">
@@ -170,11 +218,20 @@ export default function ContextSidebar({
 									onClick={() => onTaskClick?.(task)}
 								>
 									<div className="flex items-center gap-2">
-										<span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse flex-shrink-0" />
+										{task.status === "in_review" ? (
+											<GitBranch className="w-3 h-3 text-purple-500" />
+										) : (
+											<span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse flex-shrink-0" />
+										)}
 										<span className="text-xs font-medium truncate">
 											{task.title}
 										</span>
 									</div>
+									{task.status === "in_review" && (
+										<span className="text-xs text-purple-600 dark:text-purple-400 mt-1 block">
+											PR Ready for Review
+										</span>
+									)}
 								</div>
 							))}
 						</div>
@@ -196,6 +253,11 @@ export default function ContextSidebar({
 			<TaskCreateModal
 				open={taskModalOpen}
 				onOpenChange={setTaskModalOpen}
+				workspaceId={workspaceId}
+			/>
+			<IntegrationsModal
+				open={settingsOpen}
+				onOpenChange={setSettingsOpen}
 				workspaceId={workspaceId}
 			/>
 		</div>

@@ -13,6 +13,17 @@ export default defineSchema({
 		.index("by_token", ["tokenIdentifier"])
 		.index("by_email", ["email"]),
 
+	// User Integrations - Store API keys and OAuth tokens per user
+	user_integrations: defineTable({
+		userId: v.id("users"),
+		type: v.union(v.literal("github"), v.literal("cursor")),
+		config: v.string(), // Encrypted JSON with credentials
+		createdAt: v.number(),
+		updatedAt: v.optional(v.number()),
+	})
+		.index("by_user", ["userId"])
+		.index("by_user_and_type", ["userId", "type"]),
+
 	// Workspaces - Units of work (like Slack channels but with structured context)
 	workspaces: defineTable({
 		name: v.string(),
@@ -24,6 +35,17 @@ export default defineSchema({
 	})
 		.index("by_user", ["userId"])
 		.index("by_user_and_name", ["userId", "name"]),
+
+	// Workspace Repos - Link GitHub repos to workspaces
+	workspace_repos: defineTable({
+		workspaceId: v.id("workspaces"),
+		owner: v.string(), // GitHub owner/org
+		repo: v.string(), // Repository name
+		defaultBranch: v.string(), // e.g., "main"
+		userId: v.id("users"),
+		createdAt: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"]),
 
 	// Workspace Messages - Chat messages with threading support
 	workspace_messages: defineTable({
@@ -59,10 +81,13 @@ export default defineSchema({
 			v.literal("backlog"),
 			v.literal("todo"),
 			v.literal("in_progress"),
+			v.literal("in_review"), // PR created, awaiting review
 			v.literal("done"),
 		),
 		assignee: v.optional(v.union(v.literal("user"), v.literal("agent"))),
+		agentType: v.optional(v.literal("cursor")), // Which agent type (extensible for future)
 		agentPrompt: v.optional(v.string()),
+		currentAgentRunId: v.optional(v.id("agent_runs")), // Current/latest agent run
 		order: v.optional(v.number()), // For kanban drag-drop ordering
 		userId: v.id("users"),
 		createdAt: v.number(),
@@ -71,6 +96,43 @@ export default defineSchema({
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_and_status", ["workspaceId", "status"])
 		.index("by_user", ["userId"]),
+
+	// Todo Context References - Explicit links between todos and their context
+	todo_context_refs: defineTable({
+		todoId: v.id("workspace_todos"),
+		refType: v.union(v.literal("doc"), v.literal("message"), v.literal("link")),
+		refId: v.string(), // ID of the referenced item (stored as string for flexibility)
+		createdAt: v.number(),
+	})
+		.index("by_todo", ["todoId"])
+		.index("by_ref", ["refType", "refId"]),
+
+	// Agent Runs - Track execution of AI coding agents
+	agent_runs: defineTable({
+		todoId: v.id("workspace_todos"),
+		workspaceId: v.id("workspaces"),
+		userId: v.id("users"),
+		agentType: v.literal("cursor"),
+		externalAgentId: v.string(), // Cursor's agent ID (bc_xxx)
+		status: v.union(
+			v.literal("creating"),
+			v.literal("running"),
+			v.literal("finished"),
+			v.literal("failed"),
+		),
+		prUrl: v.optional(v.string()),
+		prNumber: v.optional(v.number()),
+		prStatus: v.optional(
+			v.union(v.literal("open"), v.literal("merged"), v.literal("closed")),
+		),
+		summary: v.optional(v.string()), // Agent's summary of work done
+		errorMessage: v.optional(v.string()),
+		startedAt: v.number(),
+		finishedAt: v.optional(v.number()),
+	})
+		.index("by_todo", ["todoId"])
+		.index("by_external_agent_id", ["externalAgentId"])
+		.index("by_pr", ["prNumber"]),
 
 	// Workspace Links - External links (emails, spreadsheets, figma, etc.)
 	workspace_links: defineTable({

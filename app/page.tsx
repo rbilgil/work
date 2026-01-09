@@ -1,22 +1,25 @@
 "use client";
 
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 import {
 	ArrowRight,
 	Bot,
 	CheckCircle2,
 	Clock,
+	FileText,
 	GitBranch,
 	Layers,
 	MessageSquare,
-	Moon,
 	Play,
-	Sparkles,
+	Tornado,
+	Table,
+	Ticket,
 	Users,
 	Zap,
+	X,
+	Check,
 } from "lucide-react";
 import Link from "next/link";
-import { useRef } from "react";
 
 // Animation variants
 const fadeInUp = {
@@ -48,29 +51,23 @@ function Navigation() {
 		>
 			<div className="max-w-7xl mx-auto flex items-center justify-between">
 				<Link href="/" className="flex items-center gap-2">
-					<div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 via-indigo-500 to-cyan-500 flex items-center justify-center">
-						<Sparkles className="w-5 h-5 text-white" />
+					<div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center">
+						<Tornado className="w-5 h-5 text-white" />
 					</div>
 					<span className="text-xl font-bold text-white">Whirl</span>
 				</Link>
 				<div className="hidden md:flex items-center gap-8">
 					<a
-						href="#features"
+						href="#problem"
 						className="text-sm text-white/70 hover:text-white transition-colors"
 					>
-						Features
+						The Problem
 					</a>
 					<a
-						href="#how-it-works"
+						href="#solution"
 						className="text-sm text-white/70 hover:text-white transition-colors"
 					>
 						How It Works
-					</a>
-					<a
-						href="#demo"
-						className="text-sm text-white/70 hover:text-white transition-colors"
-					>
-						Demo
 					</a>
 					<a
 						href="#pricing"
@@ -98,10 +95,10 @@ function Navigation() {
 	);
 }
 
-// Hero Section
+// Hero Section with Demo at top
 function Hero() {
 	return (
-		<section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
+		<section className="relative min-h-screen flex flex-col overflow-hidden pt-24 pb-8">
 			{/* Background gradient orbs */}
 			<div className="absolute inset-0 overflow-hidden">
 				<div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-purple-500/30 rounded-full blur-[120px] animate-pulse-glow" />
@@ -112,80 +109,51 @@ function Hero() {
 			{/* Grid pattern overlay */}
 			<div className="absolute inset-0 grid-pattern opacity-50" />
 
-			{/* Floating elements */}
-			<div className="absolute inset-0 overflow-hidden pointer-events-none">
-				<motion.div
-					className="absolute top-1/4 left-[15%] w-16 h-16 rounded-2xl glass flex items-center justify-center"
-					animate={{ y: [0, -20, 0] }}
-					transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-				>
-					<Bot className="w-8 h-8 text-purple-400" />
-				</motion.div>
-				<motion.div
-					className="absolute top-1/3 right-[20%] w-14 h-14 rounded-xl glass flex items-center justify-center"
-					animate={{ y: [0, -15, 0] }}
-					transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-				>
-					<GitBranch className="w-6 h-6 text-cyan-400" />
-				</motion.div>
-				<motion.div
-					className="absolute bottom-1/3 left-[20%] w-12 h-12 rounded-lg glass flex items-center justify-center"
-					animate={{ y: [0, -18, 0] }}
-					transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-				>
-					<Zap className="w-5 h-5 text-yellow-400" />
-				</motion.div>
-				<motion.div
-					className="absolute bottom-1/4 right-[15%] w-14 h-14 rounded-xl glass flex items-center justify-center"
-					animate={{ y: [0, -12, 0] }}
-					transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-				>
-					<Moon className="w-6 h-6 text-indigo-400" />
-				</motion.div>
-			</div>
-
-			<div className="relative z-10 max-w-5xl mx-auto px-6 text-center">
+			<div className="relative z-10 max-w-7xl mx-auto px-6 flex-1 flex flex-col">
 				<motion.div
 					initial="hidden"
 					animate="visible"
 					variants={staggerContainer}
+					className="text-center pt-8 mb-8"
 				>
 					{/* Badge */}
 					<motion.div
 						variants={fadeInUp}
-						className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8"
+						className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-6"
 					>
 						<span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
 						<span className="text-sm text-white/80">
-							Now in Early Access
+							Early Access Now Open
 						</span>
 					</motion.div>
 
-					{/* Headline */}
+					{/* Big Headline */}
 					<motion.h1
 						variants={fadeInUp}
 						className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-6"
 					>
-						<span className="text-white">Your product</span>
+						<span className="gradient-text text-shadow-glow">
+							Ship as fast as you
+						</span>
 						<br />
 						<span className="gradient-text text-shadow-glow">
-							builds itself
+							make decisions
 						</span>
 					</motion.h1>
 
 					{/* Subheadline */}
 					<motion.p
 						variants={fadeInUp}
-						className="text-lg sm:text-xl text-white/60 max-w-2xl mx-auto mb-10 leading-relaxed"
+						className="text-lg sm:text-xl text-white/60 max-w-2xl mx-auto mb-6 leading-relaxed"
 					>
-						Whirl is where AI agents and humans collaborate seamlessly.
-						Your product gets built, iterated, and shipped—even while you sleep.
+						Stop scattering context across Slack, Notion, and tickets.
+						Whirl brings everything together so AI agents can ship while you sleep.
 					</motion.p>
 
 					{/* CTA Buttons */}
 					<motion.div
 						variants={fadeInUp}
-						className="flex flex-col sm:flex-row items-center justify-center gap-4"
+						className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8"
 					>
 						<Link
 							href="/sign-up"
@@ -194,147 +162,93 @@ function Hero() {
 							Start Building Free
 							<ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
 						</Link>
-						<a
-							href="#demo"
-							className="px-8 py-4 rounded-full glass text-white font-medium text-lg flex items-center gap-2 hover:bg-white/10 transition-all"
-						>
-							<Play className="w-5 h-5" />
-							Watch Demo
-						</a>
-					</motion.div>
-
-					{/* Stats */}
-					<motion.div
-						variants={fadeInUp}
-						className="mt-16 grid grid-cols-3 gap-8 max-w-lg mx-auto"
-					>
-						{[
-							{ value: "10x", label: "Faster Iterations" },
-							{ value: "24/7", label: "Agent Availability" },
-							{ value: "∞", label: "Possibilities" },
-						].map((stat) => (
-							<div key={stat.label} className="text-center">
-								<div className="text-3xl font-bold gradient-text">
-									{stat.value}
-								</div>
-								<div className="text-sm text-white/50 mt-1">{stat.label}</div>
-							</div>
-						))}
 					</motion.div>
 				</motion.div>
-			</div>
 
-			{/* Scroll indicator */}
-			<motion.div
-				className="absolute bottom-8 left-1/2 -translate-x-1/2"
-				animate={{ y: [0, 10, 0] }}
-				transition={{ duration: 2, repeat: Infinity }}
-			>
-				<div className="w-6 h-10 rounded-full border-2 border-white/20 flex items-start justify-center p-2">
-					<div className="w-1.5 h-3 rounded-full bg-white/40" />
-				</div>
-			</motion.div>
-		</section>
-	);
-}
-
-// Logos/Trust Section
-function TrustSection() {
-	const companies = [
-		"Vercel",
-		"Stripe",
-		"Linear",
-		"Notion",
-		"Figma",
-		"Supabase",
-	];
-
-	return (
-		<section className="py-20 border-y border-white/5">
-			<div className="max-w-7xl mx-auto px-6">
-				<motion.p
-					initial={{ opacity: 0 }}
-					whileInView={{ opacity: 1 }}
-					viewport={{ once: true }}
-					className="text-center text-sm text-white/40 mb-8"
-				>
-					Trusted by engineers at
-				</motion.p>
+				{/* Product Demo - Hero Position */}
 				<motion.div
-					initial={{ opacity: 0 }}
-					whileInView={{ opacity: 1 }}
-					viewport={{ once: true }}
-					transition={{ delay: 0.2 }}
-					className="flex flex-wrap items-center justify-center gap-12"
+					initial={{ opacity: 0, y: 40 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.8, delay: 0.4 }}
+					className="relative flex-1 min-h-0"
 				>
-					{companies.map((company) => (
-						<span
-							key={company}
-							className="text-xl font-semibold text-white/20 hover:text-white/40 transition-colors"
-						>
-							{company}
-						</span>
-					))}
+					<div className="relative h-full max-w-5xl mx-auto rounded-2xl overflow-hidden glass glow-purple" style={{ minHeight: "320px" }}>
+						{/* Video placeholder */}
+						<div className="absolute inset-0 bg-gradient-to-br from-purple-900/50 via-indigo-900/50 to-cyan-900/50 flex items-center justify-center">
+							<div className="text-center">
+								<button
+									type="button"
+									className="w-20 h-20 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center backdrop-blur-sm transition-all hover:scale-110 group mb-3"
+								>
+									<Play className="w-8 h-8 text-white ml-1 group-hover:scale-110 transition-transform" />
+								</button>
+								<p className="text-white font-medium">Product Demo</p>
+								<p className="text-white/50 text-sm mt-1">Coming soon</p>
+							</div>
+						</div>
+
+						{/* Fake video UI overlay */}
+						<div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/60 to-transparent" />
+						<div className="absolute bottom-3 left-4 right-4 flex items-center gap-4">
+							<div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
+								<div className="w-0 h-full bg-gradient-to-r from-purple-500 to-cyan-500 rounded-full" />
+							</div>
+							<span className="text-sm text-white/60 font-mono">0:00</span>
+						</div>
+					</div>
+
+					{/* Floating UI elements around video */}
+					<motion.div
+						className="absolute top-4 -right-2 p-3 rounded-xl glass hidden lg:block"
+						animate={{ y: [0, -10, 0] }}
+						transition={{ duration: 4, repeat: Infinity }}
+					>
+						<div className="flex items-center gap-3">
+							<div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+								<CheckCircle2 className="w-4 h-4 text-green-400" />
+							</div>
+							<div>
+								<p className="text-sm text-white font-medium">Feature shipped</p>
+								<p className="text-xs text-white/50">While you were asleep</p>
+							</div>
+						</div>
+					</motion.div>
+
+					<motion.div
+						className="absolute bottom-4 -left-2 p-3 rounded-xl glass hidden lg:block"
+						animate={{ y: [0, 10, 0] }}
+						transition={{ duration: 5, repeat: Infinity, delay: 1 }}
+					>
+						<div className="flex items-center gap-3">
+							<div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
+								<Bot className="w-4 h-4 text-purple-400" />
+							</div>
+							<div>
+								<p className="text-sm text-white font-medium">Agent working</p>
+								<p className="text-xs text-white/50">3 tasks in progress</p>
+							</div>
+						</div>
+					</motion.div>
 				</motion.div>
 			</div>
 		</section>
 	);
 }
 
-// Features Section
-function Features() {
-	const features = [
-		{
-			icon: Bot,
-			title: "Autonomous Agents",
-			description:
-				"AI agents that understand context, break down tasks, and execute autonomously with human-in-the-loop oversight.",
-			gradient: "from-purple-500 to-indigo-500",
-		},
-		{
-			icon: MessageSquare,
-			title: "Natural Collaboration",
-			description:
-				"Chat-based interface where you discuss, plan, and iterate. Your conversations become actionable tasks.",
-			gradient: "from-indigo-500 to-cyan-500",
-		},
-		{
-			icon: Layers,
-			title: "Context-Aware",
-			description:
-				"Agents learn from your docs, code, and conversations. They understand your product deeply.",
-			gradient: "from-cyan-500 to-teal-500",
-		},
-		{
-			icon: Clock,
-			title: "24/7 Productivity",
-			description:
-				"Queue work before you sleep. Wake up to PRs, designs, and solutions ready for review.",
-			gradient: "from-teal-500 to-green-500",
-		},
-		{
-			icon: GitBranch,
-			title: "Version Everything",
-			description:
-				"Every agent action is tracked, reversible, and reviewable. Full transparency into what changed.",
-			gradient: "from-green-500 to-emerald-500",
-		},
-		{
-			icon: Users,
-			title: "Team Multiplier",
-			description:
-				"Scale your team's output without scaling headcount. Each engineer becomes a team lead.",
-			gradient: "from-emerald-500 to-cyan-500",
-		},
+// The Problem Section
+function ProblemSection() {
+	const scatteredTools = [
+		{ name: "Slack", icon: MessageSquare, color: "text-purple-400" },
+		{ name: "Notion", icon: FileText, color: "text-orange-400" },
+		{ name: "Jira", icon: Ticket, color: "text-blue-400" },
+		{ name: "Docs", icon: FileText, color: "text-cyan-400" },
+		{ name: "Sheets", icon: Table, color: "text-green-400" },
+		{ name: "Email", icon: MessageSquare, color: "text-red-400" },
 	];
 
 	return (
-		<section id="features" className="py-32 relative">
-			<div className="absolute inset-0 overflow-hidden">
-				<div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-purple-500/10 rounded-full blur-[150px]" />
-			</div>
-
-			<div className="max-w-7xl mx-auto px-6 relative z-10">
+		<section id="problem" className="py-32 relative">
+			<div className="max-w-7xl mx-auto px-6">
 				<motion.div
 					initial="hidden"
 					whileInView="visible"
@@ -346,87 +260,183 @@ function Features() {
 						variants={fadeInUp}
 						className="inline-block px-4 py-1.5 rounded-full glass text-sm text-white/60 mb-4"
 					>
-						Features
+						The Problem
 					</motion.span>
 					<motion.h2
 						variants={fadeInUp}
-						className="text-4xl sm:text-5xl font-bold text-white mb-4"
+						className="text-4xl sm:text-5xl font-bold text-white mb-6"
 					>
-						The future of product development
+						Your context is everywhere.
+						<br />
+						<span className="text-white/40">Your agents can&apos;t find it.</span>
 					</motion.h2>
 					<motion.p
 						variants={fadeInUp}
 						className="text-lg text-white/50 max-w-2xl mx-auto"
 					>
-						Everything you need to build products faster with AI-powered
-						automation and seamless human oversight.
+						Product decisions live in Slack. Specs in Notion. Tasks in Jira.
+						Data in spreadsheets. No human can keep up—and neither can AI.
 					</motion.p>
 				</motion.div>
 
+				{/* Scattered tools visualization */}
 				<motion.div
 					initial="hidden"
 					whileInView="visible"
-					viewport={{ once: true, margin: "-50px" }}
+					viewport={{ once: true }}
 					variants={staggerContainer}
-					className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+					className="relative max-w-4xl mx-auto mb-20"
 				>
-					{features.map((feature) => (
-						<motion.div
-							key={feature.title}
-							variants={fadeInUp}
-							className="group relative p-8 rounded-2xl glass hover:bg-white/[0.08] transition-all duration-300"
-						>
-							<div
-								className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}
-							>
-								<feature.icon className="w-6 h-6 text-white" />
+					<div className="aspect-[2/1] relative">
+						{/* Chaotic scattered tools */}
+						{scatteredTools.map((tool, i) => {
+							const positions = [
+								{ left: "10%", top: "15%", rotate: -5 },
+								{ left: "45%", top: "5%", rotate: 3 },
+								{ left: "75%", top: "20%", rotate: -3 },
+								{ left: "15%", top: "60%", rotate: 4 },
+								{ left: "50%", top: "65%", rotate: -6 },
+								{ left: "80%", top: "55%", rotate: 2 },
+							];
+							const pos = positions[i];
+							return (
+								<motion.div
+									key={tool.name}
+									variants={fadeInUp}
+									className="absolute glass p-4 rounded-xl"
+									style={{
+										left: pos.left,
+										top: pos.top,
+										transform: `rotate(${pos.rotate}deg)`,
+									}}
+								>
+									<div className="flex items-center gap-3">
+										<tool.icon className={`w-5 h-5 ${tool.color}`} />
+										<span className="text-white/70 text-sm">{tool.name}</span>
+									</div>
+								</motion.div>
+							);
+						})}
+
+						{/* Confused lines connecting them */}
+						<svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.15 }}>
+							<line x1="20%" y1="25%" x2="50%" y2="15%" stroke="white" strokeWidth="1" strokeDasharray="4" />
+							<line x1="55%" y1="15%" x2="80%" y2="30%" stroke="white" strokeWidth="1" strokeDasharray="4" />
+							<line x1="25%" y1="70%" x2="55%" y2="75%" stroke="white" strokeWidth="1" strokeDasharray="4" />
+							<line x1="60%" y1="75%" x2="85%" y2="65%" stroke="white" strokeWidth="1" strokeDasharray="4" />
+							<line x1="80%" y1="35%" x2="20%" y2="65%" stroke="white" strokeWidth="1" strokeDasharray="4" />
+							<line x1="50%" y1="20%" x2="55%" y2="70%" stroke="white" strokeWidth="1" strokeDasharray="4" />
+						</svg>
+					</div>
+				</motion.div>
+
+				{/* Comparison */}
+				<motion.div
+					initial="hidden"
+					whileInView="visible"
+					viewport={{ once: true }}
+					variants={staggerContainer}
+					className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto"
+				>
+					{/* Traditional Way */}
+					<motion.div
+						variants={scaleIn}
+						className="p-8 rounded-2xl bg-red-500/5 border border-red-500/20"
+					>
+						<div className="flex items-center gap-3 mb-6">
+							<div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center">
+								<X className="w-5 h-5 text-red-400" />
 							</div>
-							<h3 className="text-xl font-semibold text-white mb-3">
-								{feature.title}
-							</h3>
-							<p className="text-white/50 leading-relaxed">
-								{feature.description}
-							</p>
-						</motion.div>
-					))}
+							<h3 className="text-xl font-semibold text-white">Traditional Way</h3>
+						</div>
+						<ul className="space-y-4">
+							{[
+								"Context scattered across 6+ tools",
+								"Hours spent searching for decisions",
+								"AI can't access your full context",
+								"Agents hallucinate without information",
+								"You're the bottleneck for everything",
+							].map((item) => (
+								<li key={item} className="flex items-start gap-3 text-white/60">
+									<X className="w-5 h-5 text-red-400/60 flex-shrink-0 mt-0.5" />
+									{item}
+								</li>
+							))}
+						</ul>
+					</motion.div>
+
+					{/* The Whirl Way */}
+					<motion.div
+						variants={scaleIn}
+						className="p-8 rounded-2xl bg-gradient-to-br from-purple-500/10 to-cyan-500/10 border border-purple-500/20"
+					>
+						<div className="flex items-center gap-3 mb-6">
+							<div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center">
+								<Tornado className="w-5 h-5 text-white" />
+							</div>
+							<h3 className="text-xl font-semibold text-white">The Whirl Way</h3>
+						</div>
+						<ul className="space-y-4">
+							{[
+								"All context in one workspace",
+								"Decisions captured in conversations",
+								"Agents see everything they need",
+								"Work continues while you sleep",
+								"You focus only on decisions",
+							].map((item) => (
+								<li key={item} className="flex items-start gap-3 text-white/80">
+									<Check className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+									{item}
+								</li>
+							))}
+						</ul>
+					</motion.div>
 				</motion.div>
 			</div>
 		</section>
 	);
 }
 
-// How It Works
-function HowItWorks() {
+// How It Works / Solution Section
+function SolutionSection() {
 	const steps = [
 		{
 			number: "01",
-			title: "Describe Your Vision",
+			title: "Bring in the context",
 			description:
-				"Start a workspace and describe what you want to build. Share docs, links, and context.",
+				"Create a workspace. Drop in links, docs, and context. Chat about what you're building. Everything stays together.",
+			icon: Layers,
 		},
 		{
 			number: "02",
-			title: "Break Down Tasks",
+			title: "Break down the work",
 			description:
-				"AI helps decompose your vision into actionable tasks with clear acceptance criteria.",
+				"Define tasks from your conversations. AI helps decompose them with the full context of your discussions.",
+			icon: GitBranch,
 		},
 		{
 			number: "03",
-			title: "Assign to Agents",
+			title: "Agents take over",
 			description:
-				"Queue tasks for AI agents. They work autonomously, asking for input when needed.",
+				"Queue tasks for AI agents. They work autonomously with full context, asking you only when decisions are needed.",
+			icon: Bot,
 		},
 		{
 			number: "04",
-			title: "Review & Ship",
+			title: "Review and ship",
 			description:
-				"Review agent work, provide feedback, and ship with confidence. Iterate rapidly.",
+				"Wake up to completed work. Review, provide feedback, ship. Iterate at the speed of your decisions.",
+			icon: Zap,
 		},
 	];
 
 	return (
-		<section id="how-it-works" className="py-32 relative">
-			<div className="max-w-7xl mx-auto px-6">
+		<section id="solution" className="py-32 relative">
+			<div className="absolute inset-0 overflow-hidden">
+				<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-500/10 rounded-full blur-[180px]" />
+			</div>
+
+			<div className="max-w-7xl mx-auto px-6 relative z-10">
 				<motion.div
 					initial="hidden"
 					whileInView="visible"
@@ -442,42 +452,45 @@ function HowItWorks() {
 					</motion.span>
 					<motion.h2
 						variants={fadeInUp}
-						className="text-4xl sm:text-5xl font-bold text-white mb-4"
+						className="text-4xl sm:text-5xl font-bold text-white mb-6"
 					>
-						Simple yet powerful
+						One place for context.
+						<br />
+						<span className="gradient-text">Unlimited output.</span>
 					</motion.h2>
 					<motion.p
 						variants={fadeInUp}
 						className="text-lg text-white/50 max-w-2xl mx-auto"
 					>
-						From idea to production in four steps. Let AI handle the heavy
-						lifting while you focus on what matters.
+						Whirl is the workspace where your thinking happens—and where agents
+						turn that thinking into shipped product.
 					</motion.p>
 				</motion.div>
 
-				<div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+				<div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
 					{steps.map((step, index) => (
 						<motion.div
 							key={step.number}
 							initial={{ opacity: 0, y: 30 }}
 							whileInView={{ opacity: 1, y: 0 }}
 							viewport={{ once: true }}
-							transition={{ delay: index * 0.15 }}
-							className="relative"
+							transition={{ delay: index * 0.1 }}
+							className="relative p-6 rounded-2xl glass group hover:bg-white/[0.08] transition-all"
 						>
-							{/* Connector line */}
-							{index < steps.length - 1 && (
-								<div className="hidden lg:block absolute top-8 left-full w-full h-px bg-gradient-to-r from-white/20 to-transparent z-0" />
-							)}
-							<div className="relative z-10">
-								<span className="text-6xl font-bold gradient-text opacity-50">
+							<div className="flex items-center gap-3 mb-4">
+								<span className="text-3xl font-bold gradient-text opacity-60">
 									{step.number}
 								</span>
-								<h3 className="text-xl font-semibold text-white mt-4 mb-2">
-									{step.title}
-								</h3>
-								<p className="text-white/50">{step.description}</p>
+								<div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
+									<step.icon className="w-5 h-5 text-white/60" />
+								</div>
 							</div>
+							<h3 className="text-lg font-semibold text-white mb-2">
+								{step.title}
+							</h3>
+							<p className="text-sm text-white/50 leading-relaxed">
+								{step.description}
+							</p>
 						</motion.div>
 					))}
 				</div>
@@ -486,114 +499,64 @@ function HowItWorks() {
 	);
 }
 
-// Video Demo Section
-function VideoDemo() {
-	const containerRef = useRef<HTMLDivElement>(null);
-	const { scrollYProgress } = useScroll({
-		target: containerRef,
-		offset: ["start end", "end start"],
-	});
-	const y = useTransform(scrollYProgress, [0, 1], [100, -100]);
-	const scale = useTransform(scrollYProgress, [0, 0.5], [0.9, 1]);
+// Value Props Section
+function ValueProps() {
+	const props = [
+		{
+			icon: Clock,
+			title: "24/7 Productivity",
+			description:
+				"Agents work while you're in meetings, eating dinner, or sleeping. Your product evolves around the clock.",
+			stat: "24/7",
+			statLabel: "Continuous progress",
+		},
+		{
+			icon: MessageSquare,
+			title: "Decisions, Not Tasks",
+			description:
+				"Stop doing the work. Start making the calls. Agents handle execution—you handle direction.",
+			stat: "10x",
+			statLabel: "More leverage",
+		},
+		{
+			icon: Users,
+			title: "Team of One, Output of Ten",
+			description:
+				"A solo founder with Whirl ships like a funded startup. A small team competes with enterprises.",
+			stat: "∞",
+			statLabel: "Scale potential",
+		},
+	];
 
 	return (
-		<section id="demo" className="py-32 relative" ref={containerRef}>
-			<div className="absolute inset-0 overflow-hidden">
-				<div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-indigo-500/10 rounded-full blur-[180px]" />
-			</div>
-
-			<div className="max-w-6xl mx-auto px-6 relative z-10">
+		<section className="py-32 relative">
+			<div className="max-w-7xl mx-auto px-6">
 				<motion.div
 					initial="hidden"
 					whileInView="visible"
 					viewport={{ once: true }}
 					variants={staggerContainer}
-					className="text-center mb-12"
+					className="grid md:grid-cols-3 gap-8"
 				>
-					<motion.span
-						variants={fadeInUp}
-						className="inline-block px-4 py-1.5 rounded-full glass text-sm text-white/60 mb-4"
-					>
-						See It In Action
-					</motion.span>
-					<motion.h2
-						variants={fadeInUp}
-						className="text-4xl sm:text-5xl font-bold text-white mb-4"
-					>
-						Watch the magic happen
-					</motion.h2>
-					<motion.p
-						variants={fadeInUp}
-						className="text-lg text-white/50 max-w-2xl mx-auto"
-					>
-						See how teams are shipping 10x faster with Whirl&apos;s AI-powered
-						workflow.
-					</motion.p>
-				</motion.div>
-
-				<motion.div style={{ y, scale }} className="relative">
-					<motion.div
-						initial={{ opacity: 0, scale: 0.95 }}
-						whileInView={{ opacity: 1, scale: 1 }}
-						viewport={{ once: true }}
-						transition={{ duration: 0.8 }}
-						className="relative aspect-video rounded-2xl overflow-hidden glass glow-purple"
-					>
-						{/* Video placeholder */}
-						<div className="absolute inset-0 bg-gradient-to-br from-purple-900/50 via-indigo-900/50 to-cyan-900/50 flex items-center justify-center">
-							<div className="text-center">
-								<button
-									type="button"
-									className="w-20 h-20 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center backdrop-blur-sm transition-all hover:scale-110 group"
-								>
-									<Play className="w-8 h-8 text-white ml-1 group-hover:scale-110 transition-transform" />
-								</button>
-								<p className="text-white/60 mt-4">Product demo coming soon</p>
+					{props.map((prop) => (
+						<motion.div
+							key={prop.title}
+							variants={fadeInUp}
+							className="text-center p-8"
+						>
+							<div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-cyan-500/20 flex items-center justify-center mx-auto mb-6">
+								<prop.icon className="w-8 h-8 text-white/80" />
 							</div>
-						</div>
-
-						{/* Fake video UI overlay for visual interest */}
-						<div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/60 to-transparent" />
-						<div className="absolute bottom-4 left-4 right-4 flex items-center gap-4">
-							<div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
-								<div className="w-1/3 h-full bg-gradient-to-r from-purple-500 to-cyan-500 rounded-full" />
+							<div className="text-4xl font-bold gradient-text mb-1">
+								{prop.stat}
 							</div>
-							<span className="text-sm text-white/60 font-mono">3:42</span>
-						</div>
-					</motion.div>
-
-					{/* Floating UI elements around video */}
-					<motion.div
-						className="absolute -top-6 -right-6 p-4 rounded-xl glass hidden lg:block"
-						animate={{ y: [0, -10, 0] }}
-						transition={{ duration: 4, repeat: Infinity }}
-					>
-						<div className="flex items-center gap-3">
-							<div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-								<CheckCircle2 className="w-4 h-4 text-green-400" />
-							</div>
-							<div>
-								<p className="text-sm text-white font-medium">PR Merged</p>
-								<p className="text-xs text-white/50">By Agent-Alpha</p>
-							</div>
-						</div>
-					</motion.div>
-
-					<motion.div
-						className="absolute -bottom-6 -left-6 p-4 rounded-xl glass hidden lg:block"
-						animate={{ y: [0, 10, 0] }}
-						transition={{ duration: 5, repeat: Infinity, delay: 1 }}
-					>
-						<div className="flex items-center gap-3">
-							<div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
-								<Bot className="w-4 h-4 text-purple-400" />
-							</div>
-							<div>
-								<p className="text-sm text-white font-medium">3 tasks queued</p>
-								<p className="text-xs text-white/50">Processing overnight</p>
-							</div>
-						</div>
-					</motion.div>
+							<div className="text-sm text-white/40 mb-4">{prop.statLabel}</div>
+							<h3 className="text-xl font-semibold text-white mb-3">
+								{prop.title}
+							</h3>
+							<p className="text-white/50">{prop.description}</p>
+						</motion.div>
+					))}
 				</motion.div>
 			</div>
 		</section>
@@ -605,25 +568,25 @@ function Testimonials() {
 	const testimonials = [
 		{
 			quote:
-				"Whirl has completely transformed how our team ships features. We went from 2-week sprints to shipping daily.",
+				"I used to spend half my day context-switching between tools. Now I dump everything into Whirl and let agents figure it out.",
 			author: "Sarah Chen",
-			role: "VP Engineering",
-			company: "TechFlow",
+			role: "Solo Founder",
+			company: "Stealth Startup",
 			avatar: "SC",
 		},
 		{
 			quote:
-				"The AI agents feel like having senior engineers on call 24/7. They understand context and deliver quality work.",
+				"We shipped our entire v2 while I was on vacation. Reviewed PRs from the beach. This is how software should be built.",
 			author: "Marcus Johnson",
-			role: "Founder",
+			role: "CTO",
 			company: "Rapidify",
 			avatar: "MJ",
 		},
 		{
 			quote:
-				"Finally, a tool that doesn't just automate—it thinks. Our small team now competes with companies 10x our size.",
+				"The insight isn't the AI—it's having all your context in one place. That's what makes agents actually useful.",
 			author: "Elena Rodriguez",
-			role: "CTO",
+			role: "VP Engineering",
 			company: "ScaleUp",
 			avatar: "ER",
 		},
@@ -643,13 +606,13 @@ function Testimonials() {
 						variants={fadeInUp}
 						className="inline-block px-4 py-1.5 rounded-full glass text-sm text-white/60 mb-4"
 					>
-						Testimonials
+						Early Users
 					</motion.span>
 					<motion.h2
 						variants={fadeInUp}
 						className="text-4xl sm:text-5xl font-bold text-white"
 					>
-						Loved by builders
+						Built by builders, for builders
 					</motion.h2>
 				</motion.div>
 
@@ -694,11 +657,11 @@ function Pricing() {
 		{
 			name: "Starter",
 			price: "Free",
-			description: "For individuals and small projects",
+			description: "For individuals exploring a new way to work",
 			features: [
 				"1 workspace",
 				"100 agent tasks/month",
-				"Basic integrations",
+				"Unlimited context",
 				"Community support",
 			],
 			cta: "Get Started",
@@ -708,31 +671,30 @@ function Pricing() {
 			name: "Pro",
 			price: "$49",
 			period: "/month",
-			description: "For teams shipping fast",
+			description: "For builders shipping fast",
 			features: [
 				"Unlimited workspaces",
 				"Unlimited agent tasks",
 				"Priority processing",
 				"Advanced integrations",
 				"Email support",
-				"Custom prompts",
 			],
 			cta: "Start Free Trial",
 			highlighted: true,
 		},
 		{
-			name: "Enterprise",
-			price: "Custom",
-			description: "For organizations at scale",
+			name: "Team",
+			price: "$149",
+			period: "/month",
+			description: "For teams that ship together",
 			features: [
 				"Everything in Pro",
-				"SSO & SAML",
-				"Dedicated agents",
-				"SLA guarantee",
-				"Custom training",
-				"Dedicated support",
+				"5 team members",
+				"Shared workspaces",
+				"Team analytics",
+				"Priority support",
 			],
-			cta: "Contact Sales",
+			cta: "Start Free Trial",
 			highlighted: false,
 		},
 	];
@@ -762,13 +724,13 @@ function Pricing() {
 						variants={fadeInUp}
 						className="text-4xl sm:text-5xl font-bold text-white mb-4"
 					>
-						Simple, transparent pricing
+						Start free. Scale when ready.
 					</motion.h2>
 					<motion.p
 						variants={fadeInUp}
 						className="text-lg text-white/50 max-w-2xl mx-auto"
 					>
-						Start free, scale as you grow. No hidden fees, no surprises.
+						No credit card required. No time limit on free tier.
 					</motion.p>
 				</motion.div>
 
@@ -852,10 +814,15 @@ function CTA() {
 					</motion.h2>
 					<motion.p
 						variants={fadeInUp}
-						className="text-xl text-white/50 mb-10 max-w-2xl mx-auto"
+						className="text-xl text-white/50 mb-4 max-w-2xl mx-auto"
 					>
-						Join thousands of teams who are building the future with AI-powered
-						product development.
+						Stop managing tools. Start making decisions.
+					</motion.p>
+					<motion.p
+						variants={fadeInUp}
+						className="text-lg text-white/30 mb-10"
+					>
+						Your agents are waiting.
 					</motion.p>
 					<motion.div variants={fadeInUp}>
 						<Link
@@ -880,14 +847,14 @@ function Footer() {
 				<div className="grid md:grid-cols-5 gap-12 mb-12">
 					<div className="md:col-span-2">
 						<Link href="/" className="flex items-center gap-2 mb-4">
-							<div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 via-indigo-500 to-cyan-500 flex items-center justify-center">
-								<Sparkles className="w-5 h-5 text-white" />
+							<div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center">
+								<Tornado className="w-5 h-5 text-white" />
 							</div>
 							<span className="text-xl font-bold text-white">Whirl</span>
 						</Link>
 						<p className="text-white/50 mb-4 max-w-sm">
-							The AI-powered platform for product teams who want to build
-							faster, ship more, and sleep better.
+							The workspace where context meets execution.
+							Ship as fast as you make decisions.
 						</p>
 						<p className="text-sm text-white/30">
 							© 2025 Whirl. All rights reserved.
@@ -898,10 +865,10 @@ function Footer() {
 						<ul className="space-y-3">
 							<li>
 								<a
-									href="#features"
+									href="#solution"
 									className="text-white/50 hover:text-white transition-colors"
 								>
-									Features
+									How It Works
 								</a>
 							</li>
 							<li>
@@ -918,14 +885,6 @@ function Footer() {
 									className="text-white/50 hover:text-white transition-colors"
 								>
 									Changelog
-								</a>
-							</li>
-							<li>
-								<a
-									href="#"
-									className="text-white/50 hover:text-white transition-colors"
-								>
-									Roadmap
 								</a>
 							</li>
 						</ul>
@@ -954,15 +913,7 @@ function Footer() {
 									href="#"
 									className="text-white/50 hover:text-white transition-colors"
 								>
-									Careers
-								</a>
-							</li>
-							<li>
-								<a
-									href="#"
-									className="text-white/50 hover:text-white transition-colors"
-								>
-									Contact
+									Twitter
 								</a>
 							</li>
 						</ul>
@@ -986,14 +937,6 @@ function Footer() {
 									Terms
 								</a>
 							</li>
-							<li>
-								<a
-									href="#"
-									className="text-white/50 hover:text-white transition-colors"
-								>
-									Security
-								</a>
-							</li>
 						</ul>
 					</div>
 				</div>
@@ -1008,10 +951,9 @@ export default function LandingPage() {
 		<div className="min-h-screen bg-[#0a0a0f] text-white overflow-x-hidden">
 			<Navigation />
 			<Hero />
-			<TrustSection />
-			<Features />
-			<HowItWorks />
-			<VideoDemo />
+			<ProblemSection />
+			<SolutionSection />
+			<ValueProps />
 			<Testimonials />
 			<Pricing />
 			<CTA />

@@ -14,7 +14,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
 type ViewMode = "chat" | "board";
-type Status = "backlog" | "todo" | "in_progress" | "done";
+type Status = "backlog" | "todo" | "in_progress" | "in_review" | "done";
 
 type Todo = {
 	_id: Id<"workspace_todos">;
@@ -23,7 +23,9 @@ type Todo = {
 	status: Status;
 	order?: number;
 	assignee?: "user" | "agent";
+	agentType?: "cursor";
 	agentPrompt?: string;
+	currentAgentRunId?: Id<"agent_runs">;
 };
 
 export default function Work() {
