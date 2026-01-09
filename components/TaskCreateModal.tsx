@@ -1,15 +1,15 @@
-import { useState } from "react";
 import { useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-} from "../ui/dialog";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 
 interface TaskCreateModalProps {
 	open: boolean;
@@ -62,7 +62,8 @@ export default function TaskCreateModal({
 							autoFocus
 						/>
 						<p className="text-xs text-slate-500 mt-2">
-							AI will automatically generate a description based on your workspace context.
+							AI will automatically generate a description based on your
+							workspace context.
 						</p>
 					</div>
 					<div className="flex justify-end gap-2">

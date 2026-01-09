@@ -1,18 +1,18 @@
 import { useMutation, useQuery } from "convex/react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Bot, GripVertical, Plus } from "lucide-react";
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Plus, GripVertical, Bot } from "lucide-react";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
-import { cn } from "../../lib/utils";
+import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-} from "../ui/dialog";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 
 type Status = "backlog" | "todo" | "in_progress" | "done";
 
@@ -226,7 +226,8 @@ export default function KanbanBoard({
 				<DialogContent className="max-w-md">
 					<DialogHeader>
 						<DialogTitle>
-							Create Task in {COLUMNS.find((c) => c.id === createForColumn)?.label}
+							Create Task in{" "}
+							{COLUMNS.find((c) => c.id === createForColumn)?.label}
 						</DialogTitle>
 					</DialogHeader>
 					<form onSubmit={handleCreateTask} className="space-y-4">
@@ -238,7 +239,8 @@ export default function KanbanBoard({
 								autoFocus
 							/>
 							<p className="text-xs text-slate-500 mt-2">
-								AI will automatically generate a description based on your workspace context.
+								AI will automatically generate a description based on your
+								workspace context.
 							</p>
 						</div>
 						<div className="flex justify-end gap-2">
@@ -249,7 +251,10 @@ export default function KanbanBoard({
 							>
 								Cancel
 							</Button>
-							<Button type="submit" disabled={!newTaskTitle.trim() || isCreating}>
+							<Button
+								type="submit"
+								disabled={!newTaskTitle.trim() || isCreating}
+							>
 								{isCreating ? "Creating..." : "Create Task"}
 							</Button>
 						</div>

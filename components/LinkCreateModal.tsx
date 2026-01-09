@@ -1,23 +1,23 @@
-import { useState } from "react";
 import { useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogHeader,
 	DialogTitle,
-} from "../ui/dialog";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from "../ui/select";
+} from "@/components/ui/select";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 
 interface LinkCreateModalProps {
 	open: boolean;
@@ -99,10 +99,7 @@ export default function LinkCreateModal({
 						<label htmlFor="link-type" className="text-sm font-medium">
 							Type
 						</label>
-						<Select
-							value={type}
-							onValueChange={(v) => setType(v as LinkType)}
-						>
+						<Select value={type} onValueChange={(v) => setType(v as LinkType)}>
 							<SelectTrigger>
 								<SelectValue />
 							</SelectTrigger>

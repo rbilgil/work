@@ -1,9 +1,9 @@
-import { useQuery, useMutation } from "convex/react";
-import { useRef, useEffect } from "react";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
-import MessageItem from "./MessageItem";
+import { useMutation, useQuery } from "convex/react";
+import { useEffect, useRef } from "react";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import MessageComposer from "./MessageComposer";
+import MessageItem from "./MessageItem";
 
 interface MessageAreaProps {
 	workspaceId: Id<"workspaces">;

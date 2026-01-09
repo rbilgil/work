@@ -1,24 +1,24 @@
-import { useState, useEffect } from "react";
 import { useAction, useMutation } from "convex/react";
-import { RefreshCw, Bot, User, Sparkles } from "lucide-react";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
+import { Bot, RefreshCw, Sparkles, User } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-} from "../ui/dialog";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Textarea } from "../ui/textarea";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from "../ui/select";
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 
 type Status = "backlog" | "todo" | "in_progress" | "done";
 
@@ -47,7 +47,9 @@ export default function TaskDetailModal({
 	const [description, setDescription] = useState(todo.description ?? "");
 	const [status, setStatus] = useState<Status>(todo.status);
 
-	const generateDescription = useAction(api.workspaceAi.generateTaskDescription);
+	const generateDescription = useAction(
+		api.workspaceAi.generateTaskDescription,
+	);
 	const updateTodo = useMutation(api.workspaces.updateWorkspaceTodo);
 	const queueForAgent = useMutation(api.workspaces.queueTodoForAgent);
 
@@ -71,7 +73,9 @@ export default function TaskDetailModal({
 			if (result.suggestedSteps && result.suggestedSteps.length > 0) {
 				fullDescription +=
 					"\n\n**Steps:**\n" +
-					result.suggestedSteps.map((s: string, i: number) => `${i + 1}. ${s}`).join("\n");
+					result.suggestedSteps
+						.map((s: string, i: number) => `${i + 1}. ${s}`)
+						.join("\n");
 			}
 
 			setDescription(fullDescription);

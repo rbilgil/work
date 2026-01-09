@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-	title: "Canvas AI - AI-Powered Graphics Editor",
+	title: "Whirl - Your product builds itself",
 	description:
-		"Create stunning graphics with AI assistance. A powerful canvas editor combining traditional design tools with AI-powered image generation and editing.",
+		"Whirl is where AI agents and humans collaborate seamlessly. Your product gets built, iterated, and shipped—even while you sleep.",
 };
 
 export default function RootLayout({
@@ -31,7 +31,11 @@ export default function RootLayout({
 			<body
 				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
 			>
-				<ClerkProvider>
+				<ClerkProvider
+					signInUrl="/sign-in"
+					signUpUrl="/sign-up"
+					afterSignOutUrl="/"
+				>
 					<ConvexClientProvider>
 						{children}
 						<Toaster />

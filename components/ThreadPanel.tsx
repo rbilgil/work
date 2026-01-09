@@ -1,11 +1,11 @@
-import { useQuery, useMutation } from "convex/react";
-import { X } from "lucide-react";
+import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
-import { Button } from "../ui/button";
-import MessageItem from "./MessageItem";
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import MessageComposer from "./MessageComposer";
+import MessageItem from "./MessageItem";
 
 interface ThreadPanelProps {
 	messageId: Id<"workspace_messages">;

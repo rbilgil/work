@@ -1,16 +1,22 @@
 import { useQuery } from "convex/react";
+import {
+	Bot,
+	CheckSquare,
+	FileText,
+	LayoutGrid,
+	Link as LinkIcon,
+} from "lucide-react";
 import { useState } from "react";
-import { FileText, CheckSquare, Link as LinkIcon, Bot, LayoutGrid } from "lucide-react";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
+import { Button } from "@/components/ui/button";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import ContextSection from "./ContextSection";
-import DocItem from "./DocItem";
-import WorkspaceTodoItem from "./WorkspaceTodoItem";
-import LinkItem from "./LinkItem";
 import DocCreateModal from "./DocCreateModal";
+import DocItem from "./DocItem";
 import LinkCreateModal from "./LinkCreateModal";
+import LinkItem from "./LinkItem";
 import TaskCreateModal from "./TaskCreateModal";
-import { Button } from "../ui/button";
+import WorkspaceTodoItem from "./WorkspaceTodoItem";
 
 type Status = "backlog" | "todo" | "in_progress" | "done";
 
@@ -44,9 +50,10 @@ export default function ContextSidebar({
 	const [taskModalOpen, setTaskModalOpen] = useState(false);
 
 	// Get tasks assigned to agent that are in progress
-	const agentTasks = (todos as Todo[] | undefined)?.filter(
-		(t) => t.assignee === "agent" && t.status === "in_progress"
-	) ?? [];
+	const agentTasks =
+		(todos as Todo[] | undefined)?.filter(
+			(t) => t.assignee === "agent" && t.status === "in_progress",
+		) ?? [];
 
 	return (
 		<div className="w-72 flex-shrink-0 border-l border-slate-200/70 dark:border-white/10 bg-slate-50/50 dark:bg-slate-900/50 overflow-y-auto">
@@ -65,7 +72,18 @@ export default function ContextSidebar({
 					{docs?.length === 0 ? (
 						<p className="text-xs text-slate-500 py-2">No documents yet</p>
 					) : (
-						docs?.map((doc) => <DocItem key={doc._id} doc={doc as { _id: Id<"workspace_docs">; title: string; content: string }} />)
+						docs?.map((doc) => (
+							<DocItem
+								key={doc._id}
+								doc={
+									doc as {
+										_id: Id<"workspace_docs">;
+										title: string;
+										content: string;
+									}
+								}
+							/>
+						))
 					)}
 				</ContextSection>
 
@@ -74,7 +92,9 @@ export default function ContextSidebar({
 					title="Tasks"
 					icon={<CheckSquare className="w-4 h-4" />}
 					onAdd={() => setTaskModalOpen(true)}
-					count={todos?.filter((t: { status: string }) => t.status !== "done").length}
+					count={
+						todos?.filter((t: { status: string }) => t.status !== "done").length
+					}
 				>
 					{todos?.length === 0 ? (
 						<p className="text-xs text-slate-500 py-2">No tasks yet</p>
@@ -99,7 +119,24 @@ export default function ContextSidebar({
 					{links?.length === 0 ? (
 						<p className="text-xs text-slate-500 py-2">No links yet</p>
 					) : (
-						links?.map((link) => <LinkItem key={link._id} link={link as { _id: Id<"workspace_links">; url: string; title: string; type: "email" | "spreadsheet" | "figma" | "document" | "other" }} />)
+						links?.map((link) => (
+							<LinkItem
+								key={link._id}
+								link={
+									link as {
+										_id: Id<"workspace_links">;
+										url: string;
+										title: string;
+										type:
+											| "email"
+											| "spreadsheet"
+											| "figma"
+											| "document"
+											| "other";
+									}
+								}
+							/>
+						))
 					)}
 				</ContextSection>
 

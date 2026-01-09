@@ -1,15 +1,15 @@
 import { useMutation } from "convex/react";
 import {
 	ExternalLink,
-	Mail,
-	FileSpreadsheet,
 	Figma,
+	FileSpreadsheet,
 	FileText,
 	Link as LinkIcon,
+	Mail,
 	Trash2,
 } from "lucide-react";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 
 interface LinkItemProps {
 	link: {

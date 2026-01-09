@@ -1,9 +1,9 @@
 import { useMutation } from "convex/react";
-import { Trash2, Bot } from "lucide-react";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
-import { Checkbox } from "../ui/checkbox";
-import { cn } from "../../lib/utils";
+import { Bot, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 
 type Status = "backlog" | "todo" | "in_progress" | "done";
 

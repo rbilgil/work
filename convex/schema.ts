@@ -5,6 +5,14 @@ import { v } from "convex/values";
 // requires indexes defined on `authTables`.
 // The schema provides more precise TypeScript types.
 export default defineSchema({
+	users: defineTable({
+		name: v.optional(v.string()),
+		email: v.string(),
+		tokenIdentifier: v.string(),
+	})
+		.index("by_token", ["tokenIdentifier"])
+		.index("by_email", ["email"]),
+
 	// Workspaces - Units of work (like Slack channels but with structured context)
 	workspaces: defineTable({
 		name: v.string(),

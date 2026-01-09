@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from "react";
 import { ChevronDown, Plus } from "lucide-react";
-import { Button } from "../ui/button";
-import { cn } from "../../lib/utils";
+import { type ReactNode, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface ContextSectionProps {
 	title: string;

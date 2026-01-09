@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { Send } from "lucide-react";
-import { Button } from "../ui/button";
-import { Textarea } from "../ui/textarea";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 interface MessageComposerProps {
 	onSend: (content: string) => Promise<void>;

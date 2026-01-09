@@ -1,9 +1,9 @@
 import { useQuery } from "convex/react";
-import { Plus, Briefcase } from "lucide-react";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
-import { Button } from "../ui/button";
-import { cn } from "../../lib/utils";
+import { Briefcase, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 
 interface WorkspaceSidebarProps {
 	selectedWorkspaceId: Id<"workspaces"> | null;

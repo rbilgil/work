@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { MessageSquare } from "lucide-react";
-import { formatRelativeTime } from "../../lib/utils";
-import type { Id } from "../../../convex/_generated/dataModel";
+import { formatRelativeTime } from "@/lib/utils";
+import type { Id } from "../convex/_generated/dataModel";
 
 interface MessageItemProps {
 	message: {
