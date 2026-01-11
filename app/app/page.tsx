@@ -1,6 +1,8 @@
 "use client";
+
 import { useQuery } from "convex/react";
-import { LayoutGrid, MessageSquare } from "lucide-react";
+import { LayoutGrid, Loader2, MessageSquare } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ContextSidebar from "@/components/ContextSidebar";
 import KanbanBoard from "@/components/KanbanBoard";
@@ -29,6 +31,7 @@ type Todo = {
 };
 
 export default function Work() {
+	const router = useRouter();
 	const [selectedWorkspaceId, setSelectedWorkspaceId] =
 		useState<Id<"workspaces"> | null>(null);
 	const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
@@ -37,7 +40,27 @@ export default function Work() {
 	const [viewMode, setViewMode] = useState<ViewMode>("chat");
 	const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
 
-	const workspaces = useQuery(api.workspaces.listWorkspaces);
+	// Check onboarding status
+	const onboardingStatus = useQuery(api.organizations.needsOnboarding);
+
+	// Get user's organizations
+	const organizations = useQuery(api.organizations.listMyOrganizations);
+
+	// Use the first organization for now (later can add org switcher)
+	const currentOrganization = organizations?.[0];
+
+	// Get workspaces for the current organization
+	const workspaces = useQuery(
+		api.workspaces.listWorkspaces,
+		currentOrganization ? { organizationId: currentOrganization._id } : "skip",
+	);
+
+	// Redirect to onboarding if needed
+	useEffect(() => {
+		if (onboardingStatus?.needsOnboarding) {
+			router.replace("/app/onboarding");
+		}
+	}, [onboardingStatus, router]);
 
 	// Auto-select first workspace
 	useEffect(() => {
@@ -53,10 +76,34 @@ export default function Work() {
 		}
 	}, [viewMode]);
 
+	// Show loading while checking onboarding
+	if (onboardingStatus === undefined || organizations === undefined) {
+		return (
+			<div className="flex h-[calc(100vh-5rem)] items-center justify-center">
+				<Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+			</div>
+		);
+	}
+
+	// If needs onboarding, show nothing (will redirect)
+	if (onboardingStatus?.needsOnboarding) {
+		return null;
+	}
+
+	// If no organizations, show nothing (shouldn't happen)
+	if (!currentOrganization) {
+		return (
+			<div className="flex h-[calc(100vh-5rem)] items-center justify-center text-slate-500">
+				<p>No organization found. Please refresh the page.</p>
+			</div>
+		);
+	}
+
 	return (
 		<div className="flex h-[calc(100vh-5rem)] max-w-7xl mx-auto border border-slate-200/70 dark:border-white/10 rounded-lg overflow-hidden bg-white dark:bg-slate-950">
 			{/* Left Sidebar - Workspace List */}
 			<WorkspaceSidebar
+				organizationId={currentOrganization._id}
 				selectedWorkspaceId={selectedWorkspaceId}
 				onSelectWorkspace={setSelectedWorkspaceId}
 				onNewWorkspace={() => setCreateWorkspaceOpen(true)}
@@ -135,6 +182,7 @@ export default function Work() {
 			{/* Right Sidebar - Context (Docs, Todos, Links) */}
 			{selectedWorkspaceId && (
 				<ContextSidebar
+					organizationId={currentOrganization._id}
 					workspaceId={selectedWorkspaceId}
 					onTaskClick={(todo) => setSelectedTodo(todo)}
 					onGoToBoard={() => setViewMode("board")}
@@ -145,6 +193,7 @@ export default function Work() {
 			<WorkspaceCreateModal
 				open={createWorkspaceOpen}
 				onOpenChange={setCreateWorkspaceOpen}
+				organizationId={currentOrganization._id}
 			/>
 
 			{selectedTodo && selectedWorkspaceId && (

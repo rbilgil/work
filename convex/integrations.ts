@@ -1,40 +1,153 @@
+import type { GenericMutationCtx } from "convex/server";
 import { v } from "convex/values";
-import { internalQuery, mutation, query } from "./_generated/server";
+import type { DataModel, Id } from "./_generated/dataModel";
+import {
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "./_generated/server";
 import { getAuthUser, requireAuthUser } from "./auth";
 
-// ============ USER INTEGRATIONS ============
+// ============ ENCRYPTION HELPERS ============
+// Uses AES-GCM for symmetric encryption with a server-side key
+
+const ENCRYPTION_KEY = process.env.INTEGRATION_ENCRYPTION_KEY || "";
+
+async function getEncryptionKey(): Promise<CryptoKey> {
+	if (!ENCRYPTION_KEY) {
+		throw new Error("INTEGRATION_ENCRYPTION_KEY environment variable not set");
+	}
+
+	// Convert the hex key to bytes
+	const keyBytes = new Uint8Array(
+		ENCRYPTION_KEY.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || [],
+	);
+
+	// Import the key for AES-GCM
+	return await crypto.subtle.importKey(
+		"raw",
+		keyBytes,
+		{ name: "AES-GCM", length: 256 },
+		false,
+		["encrypt", "decrypt"],
+	);
+}
 
 /**
- * Save Cursor API key for the current user
+ * Encrypt a string using AES-GCM
+ * Returns base64-encoded string with IV prepended
+ */
+async function encryptString(plaintext: string): Promise<string> {
+	const key = await getEncryptionKey();
+	const encoder = new TextEncoder();
+	const data = encoder.encode(plaintext);
+
+	// Generate a random 12-byte IV
+	const iv = crypto.getRandomValues(new Uint8Array(12));
+
+	// Encrypt the data
+	const encrypted = await crypto.subtle.encrypt(
+		{ name: "AES-GCM", iv },
+		key,
+		data,
+	);
+
+	// Combine IV + ciphertext and encode as base64
+	const combined = new Uint8Array(iv.length + encrypted.byteLength);
+	combined.set(iv, 0);
+	combined.set(new Uint8Array(encrypted), iv.length);
+
+	return btoa(String.fromCharCode(...combined));
+}
+
+/**
+ * Decrypt a string using AES-GCM
+ * Expects base64-encoded string with IV prepended
+ */
+async function decryptString(ciphertext: string): Promise<string> {
+	const key = await getEncryptionKey();
+
+	// Decode from base64
+	const combined = new Uint8Array(
+		atob(ciphertext)
+			.split("")
+			.map((c) => c.charCodeAt(0)),
+	);
+
+	// Extract IV and encrypted data
+	const iv = combined.slice(0, 12);
+	const encrypted = combined.slice(12);
+
+	// Decrypt the data
+	const decrypted = await crypto.subtle.decrypt(
+		{ name: "AES-GCM", iv },
+		key,
+		encrypted,
+	);
+
+	const decoder = new TextDecoder();
+	return decoder.decode(decrypted);
+}
+
+// ============ ORGANIZATION INTEGRATIONS ============
+
+/**
+ * Helper to verify organization membership
+ */
+async function verifyOrgMembership(
+	ctx: GenericMutationCtx<DataModel>,
+	organizationId: Id<"organizations">,
+	userId: Id<"users">,
+): Promise<boolean> {
+	const membership = await ctx.db
+		.query("organization_members")
+		.withIndex("by_org_and_user", (q) =>
+			q.eq("organizationId", organizationId).eq("userId", userId),
+		)
+		.unique();
+	return membership !== null;
+}
+
+/**
+ * Save Cursor API key for an organization
  */
 export const saveCursorApiKey = mutation({
 	args: {
+		organizationId: v.id("organizations"),
 		apiKey: v.string(),
 	},
 	returns: v.boolean(),
 	handler: async (ctx, args) => {
 		const user = await requireAuthUser(ctx);
 
+		// Verify organization membership
+		if (!(await verifyOrgMembership(ctx, args.organizationId, user._id))) {
+			throw new Error("Organization not found or access denied");
+		}
+
 		// Check if integration already exists
 		const existing = await ctx.db
-			.query("user_integrations")
-			.withIndex("by_user_and_type", (q) =>
-				q.eq("userId", user._id).eq("type", "cursor"),
+			.query("organization_integrations")
+			.withIndex("by_organization_and_type", (q) =>
+				q.eq("organizationId", args.organizationId).eq("type", "cursor"),
 			)
 			.unique();
 
-		const config = JSON.stringify({ apiKey: args.apiKey });
+		// Encrypt the API key
+		const encryptedAccessToken = await encryptString(args.apiKey);
 
 		if (existing) {
 			await ctx.db.patch(existing._id, {
-				config,
+				encryptedAccessToken,
 				updatedAt: Date.now(),
 			});
 		} else {
-			await ctx.db.insert("user_integrations", {
-				userId: user._id,
+			await ctx.db.insert("organization_integrations", {
+				organizationId: args.organizationId,
 				type: "cursor",
-				config,
+				encryptedAccessToken,
+				createdByUserId: user._id,
 				createdAt: Date.now(),
 			});
 		}
@@ -43,66 +156,173 @@ export const saveCursorApiKey = mutation({
 	},
 });
 
+// ============ GITHUB OAUTH STATE MANAGEMENT ============
+
 /**
- * Save GitHub OAuth tokens for the current user
+ * Initiate GitHub OAuth flow for an organization - creates state for CSRF protection
+ * Returns the OAuth URL with state parameter
  */
-export const saveGitHubTokens = mutation({
+export const initiateGitHubOAuth = mutation({
 	args: {
+		organizationId: v.id("organizations"),
+	},
+	returns: v.object({
+		authUrl: v.string(),
+		state: v.string(),
+	}),
+	handler: async (ctx, args) => {
+		const user = await requireAuthUser(ctx);
+
+		// Verify organization membership
+		if (!(await verifyOrgMembership(ctx, args.organizationId, user._id))) {
+			throw new Error("Organization not found or access denied");
+		}
+
+		// Generate a random state value
+		const stateBytes = crypto.getRandomValues(new Uint8Array(32));
+		const state = Array.from(stateBytes)
+			.map((b) => b.toString(16).padStart(2, "0"))
+			.join("");
+
+		// Check if integration already exists
+		const existing = await ctx.db
+			.query("organization_integrations")
+			.withIndex("by_organization_and_type", (q) =>
+				q.eq("organizationId", args.organizationId).eq("type", "github"),
+			)
+			.unique();
+
+		const oauthStateExpiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+		if (existing) {
+			// Update existing integration with new OAuth state
+			await ctx.db.patch(existing._id, {
+				oauthState: state,
+				oauthStateExpiresAt,
+				updatedAt: Date.now(),
+			});
+		} else {
+			// Create a new pending integration with OAuth state
+			await ctx.db.insert("organization_integrations", {
+				organizationId: args.organizationId,
+				type: "github",
+				oauthState: state,
+				oauthStateExpiresAt,
+				createdByUserId: user._id,
+				createdAt: Date.now(),
+			});
+		}
+
+		// Build the OAuth URL
+		const clientId = process.env.GITHUB_CLIENT_ID;
+		if (!clientId) {
+			throw new Error("GitHub OAuth not configured");
+		}
+
+		const convexUrl = process.env.CONVEX_SITE_URL;
+		if (!convexUrl) {
+			throw new Error("CONVEX_SITE_URL not configured");
+		}
+
+		const redirectUri = `${convexUrl}/auth/github/callback`;
+		const scope = "repo";
+
+		const authUrl = new URL("https://github.com/login/oauth/authorize");
+		authUrl.searchParams.set("client_id", clientId);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("scope", scope);
+		authUrl.searchParams.set("state", state);
+
+		return {
+			authUrl: authUrl.toString(),
+			state,
+		};
+	},
+});
+
+/**
+ * Complete GitHub OAuth flow - verifies state and saves tokens
+ * Called internally from the HTTP callback handler
+ */
+export const completeGitHubOAuth = internalMutation({
+	args: {
+		state: v.string(),
 		accessToken: v.string(),
 		refreshToken: v.optional(v.string()),
 		username: v.string(),
 	},
-	returns: v.boolean(),
+	returns: v.object({
+		success: v.boolean(),
+		error: v.optional(v.string()),
+	}),
 	handler: async (ctx, args) => {
-		const user = await requireAuthUser(ctx);
-
-		// Check if integration already exists
-		const existing = await ctx.db
-			.query("user_integrations")
-			.withIndex("by_user_and_type", (q) =>
-				q.eq("userId", user._id).eq("type", "github"),
-			)
+		// Find the integration by OAuth state
+		const integration = await ctx.db
+			.query("organization_integrations")
+			.withIndex("by_oauth_state", (q) => q.eq("oauthState", args.state))
 			.unique();
 
-		const config = JSON.stringify({
-			accessToken: args.accessToken,
-			refreshToken: args.refreshToken,
-			username: args.username,
-		});
-
-		if (existing) {
-			await ctx.db.patch(existing._id, {
-				config,
-				updatedAt: Date.now(),
-			});
-		} else {
-			await ctx.db.insert("user_integrations", {
-				userId: user._id,
-				type: "github",
-				config,
-				createdAt: Date.now(),
-			});
+		if (!integration) {
+			return { success: false, error: "Invalid or expired state" };
 		}
 
-		return true;
+		// Check if state has expired
+		if (
+			integration.oauthStateExpiresAt &&
+			Date.now() > integration.oauthStateExpiresAt
+		) {
+			// Clear the expired state
+			await ctx.db.patch(integration._id, {
+				oauthState: undefined,
+				oauthStateExpiresAt: undefined,
+			});
+			return { success: false, error: "OAuth state expired" };
+		}
+
+		// Encrypt the tokens
+		const encryptedAccessToken = await encryptString(args.accessToken);
+		const encryptedRefreshToken = args.refreshToken
+			? await encryptString(args.refreshToken)
+			: undefined;
+		const encryptedConfig = await encryptString(
+			JSON.stringify({ username: args.username }),
+		);
+
+		// Update integration with tokens and clear the OAuth state
+		await ctx.db.patch(integration._id, {
+			encryptedAccessToken,
+			encryptedRefreshToken,
+			encryptedConfig,
+			oauthState: undefined,
+			oauthStateExpiresAt: undefined,
+			updatedAt: Date.now(),
+		});
+
+		return { success: true };
 	},
 });
 
 /**
- * Remove an integration for the current user
+ * Remove an integration from an organization
  */
 export const removeIntegration = mutation({
 	args: {
+		organizationId: v.id("organizations"),
 		type: v.union(v.literal("github"), v.literal("cursor")),
 	},
 	returns: v.boolean(),
 	handler: async (ctx, args) => {
 		const user = await requireAuthUser(ctx);
 
+		// Verify organization membership
+		if (!(await verifyOrgMembership(ctx, args.organizationId, user._id))) {
+			throw new Error("Organization not found or access denied");
+		}
+
 		const existing = await ctx.db
-			.query("user_integrations")
-			.withIndex("by_user_and_type", (q) =>
-				q.eq("userId", user._id).eq("type", args.type),
+			.query("organization_integrations")
+			.withIndex("by_organization_and_type", (q) =>
+				q.eq("organizationId", args.organizationId).eq("type", args.type),
 			)
 			.unique();
 
@@ -115,10 +335,12 @@ export const removeIntegration = mutation({
 });
 
 /**
- * Get user's integrations (with masked credentials)
+ * Get organization's integrations (with masked credentials)
  */
-export const getUserIntegrations = query({
-	args: {},
+export const getOrganizationIntegrations = query({
+	args: {
+		organizationId: v.id("organizations"),
+	},
 	returns: v.object({
 		cursor: v.union(
 			v.object({
@@ -140,7 +362,7 @@ export const getUserIntegrations = query({
 			}),
 		),
 	}),
-	handler: async (ctx) => {
+	handler: async (ctx, args) => {
 		const user = await getAuthUser(ctx);
 		if (!user) {
 			return {
@@ -149,21 +371,41 @@ export const getUserIntegrations = query({
 			};
 		}
 
+		// Verify organization membership
+		const membership = await ctx.db
+			.query("organization_members")
+			.withIndex("by_org_and_user", (q) =>
+				q.eq("organizationId", args.organizationId).eq("userId", user._id),
+			)
+			.unique();
+
+		if (!membership) {
+			return {
+				cursor: { connected: false as const },
+				github: { connected: false as const },
+			};
+		}
+
 		const integrations = await ctx.db
-			.query("user_integrations")
-			.withIndex("by_user", (q) => q.eq("userId", user._id))
+			.query("organization_integrations")
+			.withIndex("by_organization", (q) =>
+				q.eq("organizationId", args.organizationId),
+			)
 			.collect();
 
 		const cursorIntegration = integrations.find((i) => i.type === "cursor");
 		const githubIntegration = integrations.find((i) => i.type === "github");
 
 		let githubUsername = "";
-		if (githubIntegration) {
+		if (githubIntegration?.encryptedConfig) {
 			try {
-				const config = JSON.parse(githubIntegration.config);
+				const decryptedConfig = await decryptString(
+					githubIntegration.encryptedConfig,
+				);
+				const config = JSON.parse(decryptedConfig);
 				githubUsername = config.username || "";
 			} catch {
-				// Invalid config
+				// Invalid or corrupted config
 			}
 		}
 
@@ -185,6 +427,26 @@ export const getUserIntegrations = query({
 // ============ WORKSPACE REPOS ============
 
 /**
+ * Helper to verify workspace access via org membership
+ */
+async function verifyWorkspaceAccess(
+	ctx: GenericMutationCtx<DataModel>,
+	workspaceId: Id<"workspaces">,
+	userId: Id<"users">,
+): Promise<boolean> {
+	const workspace = await ctx.db.get(workspaceId);
+	if (!workspace) return false;
+
+	const membership = await ctx.db
+		.query("organization_members")
+		.withIndex("by_org_and_user", (q) =>
+			q.eq("organizationId", workspace.organizationId).eq("userId", userId),
+		)
+		.unique();
+	return membership !== null;
+}
+
+/**
  * Connect a GitHub repo to a workspace
  */
 export const connectRepoToWorkspace = mutation({
@@ -198,10 +460,9 @@ export const connectRepoToWorkspace = mutation({
 	handler: async (ctx, args) => {
 		const user = await requireAuthUser(ctx);
 
-		// Verify workspace ownership
-		const workspace = await ctx.db.get(args.workspaceId);
-		if (!workspace || workspace.userId !== user._id) {
-			throw new Error("Workspace not found");
+		// Verify workspace access via org membership
+		if (!(await verifyWorkspaceAccess(ctx, args.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
 		}
 
 		// Remove existing repo connection if any
@@ -220,7 +481,7 @@ export const connectRepoToWorkspace = mutation({
 			owner: args.owner,
 			repo: args.repo,
 			defaultBranch: args.defaultBranch,
-			userId: user._id,
+			createdByUserId: user._id,
 			createdAt: Date.now(),
 		});
 
@@ -239,10 +500,9 @@ export const disconnectRepo = mutation({
 	handler: async (ctx, args) => {
 		const user = await requireAuthUser(ctx);
 
-		// Verify workspace ownership
-		const workspace = await ctx.db.get(args.workspaceId);
-		if (!workspace || workspace.userId !== user._id) {
-			throw new Error("Workspace not found");
+		// Verify workspace access via org membership
+		if (!(await verifyWorkspaceAccess(ctx, args.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
 		}
 
 		const existing = await ctx.db
@@ -280,11 +540,18 @@ export const getWorkspaceRepo = query({
 			return null;
 		}
 
-		// Verify workspace ownership
+		// Verify workspace access via org membership
 		const workspace = await ctx.db.get(args.workspaceId);
-		if (!workspace || workspace.userId !== user._id) {
-			return null;
-		}
+		if (!workspace) return null;
+
+		const membership = await ctx.db
+			.query("organization_members")
+			.withIndex("by_org_and_user", (q) =>
+				q.eq("organizationId", workspace.organizationId).eq("userId", user._id),
+			)
+			.unique();
+
+		if (!membership) return null;
 
 		const repo = await ctx.db
 			.query("workspace_repos")
@@ -306,6 +573,7 @@ export const getWorkspaceRepo = query({
 
 /**
  * Check if workspace has all required integrations for agent execution
+ * Integrations are checked at the organization level
  */
 export const hasRequiredIntegrations = query({
 	args: {
@@ -323,14 +591,27 @@ export const hasRequiredIntegrations = query({
 			return { cursor: false, github: false, repo: false, ready: false };
 		}
 
-		// Check user integrations
+		// Get workspace and its organization
+		const workspace = await ctx.db.get(args.workspaceId);
+		if (!workspace) {
+			return { cursor: false, github: false, repo: false, ready: false };
+		}
+
+		// Check organization integrations
 		const integrations = await ctx.db
-			.query("user_integrations")
-			.withIndex("by_user", (q) => q.eq("userId", user._id))
+			.query("organization_integrations")
+			.withIndex("by_organization", (q) =>
+				q.eq("organizationId", workspace.organizationId),
+			)
 			.collect();
 
-		const hasCursor = integrations.some((i) => i.type === "cursor");
-		const hasGithub = integrations.some((i) => i.type === "github");
+		// Only count integrations that have tokens (not just pending OAuth states)
+		const hasCursor = integrations.some(
+			(i) => i.type === "cursor" && i.encryptedAccessToken,
+		);
+		const hasGithub = integrations.some(
+			(i) => i.type === "github" && i.encryptedAccessToken,
+		);
 
 		// Check workspace repo
 		const repo = await ctx.db
@@ -352,28 +633,32 @@ export const hasRequiredIntegrations = query({
 // ============ INTERNAL QUERIES (for agent execution) ============
 
 /**
- * Get decrypted Cursor API key for a user (internal use only)
+ * Get decrypted Cursor API key for a workspace (internal use only)
+ * Looks up the workspace's organization and gets the integration from there
  */
 export const getDecryptedCursorKey = internalQuery({
 	args: {
-		userId: v.id("users"),
+		workspaceId: v.id("workspaces"),
 	},
 	returns: v.union(v.string(), v.null()),
 	handler: async (ctx, args) => {
+		// Get workspace to find its organization
+		const workspace = await ctx.db.get(args.workspaceId);
+		if (!workspace) return null;
+
 		const integration = await ctx.db
-			.query("user_integrations")
-			.withIndex("by_user_and_type", (q) =>
-				q.eq("userId", args.userId).eq("type", "cursor"),
+			.query("organization_integrations")
+			.withIndex("by_organization_and_type", (q) =>
+				q.eq("organizationId", workspace.organizationId).eq("type", "cursor"),
 			)
 			.unique();
 
-		if (!integration) {
+		if (!integration?.encryptedAccessToken) {
 			return null;
 		}
 
 		try {
-			const config = JSON.parse(integration.config);
-			return config.apiKey || null;
+			return await decryptString(integration.encryptedAccessToken);
 		} catch {
 			return null;
 		}
@@ -381,11 +666,12 @@ export const getDecryptedCursorKey = internalQuery({
 });
 
 /**
- * Get decrypted GitHub token for a user (internal use only)
+ * Get decrypted GitHub token for a workspace (internal use only)
+ * Looks up the workspace's organization and gets the integration from there
  */
 export const getDecryptedGitHubToken = internalQuery({
 	args: {
-		userId: v.id("users"),
+		workspaceId: v.id("workspaces"),
 	},
 	returns: v.union(
 		v.object({
@@ -396,23 +682,40 @@ export const getDecryptedGitHubToken = internalQuery({
 		v.null(),
 	),
 	handler: async (ctx, args) => {
+		// Get workspace to find its organization
+		const workspace = await ctx.db.get(args.workspaceId);
+		if (!workspace) return null;
+
 		const integration = await ctx.db
-			.query("user_integrations")
-			.withIndex("by_user_and_type", (q) =>
-				q.eq("userId", args.userId).eq("type", "github"),
+			.query("organization_integrations")
+			.withIndex("by_organization_and_type", (q) =>
+				q.eq("organizationId", workspace.organizationId).eq("type", "github"),
 			)
 			.unique();
 
-		if (!integration) {
+		if (!integration?.encryptedAccessToken) {
 			return null;
 		}
 
 		try {
-			const config = JSON.parse(integration.config);
+			const accessToken = await decryptString(integration.encryptedAccessToken);
+			const refreshToken = integration.encryptedRefreshToken
+				? await decryptString(integration.encryptedRefreshToken)
+				: null;
+
+			let username = "";
+			if (integration.encryptedConfig) {
+				const decryptedConfig = await decryptString(
+					integration.encryptedConfig,
+				);
+				const config = JSON.parse(decryptedConfig);
+				username = config.username || "";
+			}
+
 			return {
-				accessToken: config.accessToken,
-				refreshToken: config.refreshToken || null,
-				username: config.username,
+				accessToken,
+				refreshToken,
+				username,
 			};
 		} catch {
 			return null;

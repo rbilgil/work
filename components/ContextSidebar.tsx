@@ -36,12 +36,14 @@ type Todo = {
 };
 
 interface ContextSidebarProps {
+	organizationId: Id<"organizations">;
 	workspaceId: Id<"workspaces">;
 	onTaskClick?: (todo: Todo) => void;
 	onGoToBoard?: () => void;
 }
 
 export default function ContextSidebar({
+	organizationId,
 	workspaceId,
 	onTaskClick,
 	onGoToBoard,
@@ -258,6 +260,7 @@ export default function ContextSidebar({
 			<IntegrationsModal
 				open={settingsOpen}
 				onOpenChange={setSettingsOpen}
+				organizationId={organizationId}
 				workspaceId={workspaceId}
 			/>
 		</div>

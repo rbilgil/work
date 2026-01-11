@@ -47,10 +47,10 @@ export const startCursorAgent = action({
 			return { success: false, error: "Todo not found" };
 		}
 
-		// Check for required integrations
+		// Check for required integrations (workspace-level)
 		const cursorKey = await ctx.runQuery(
 			internal.integrations.getDecryptedCursorKey,
-			{ userId: todoData.userId },
+			{ workspaceId: todoData.workspaceId },
 		);
 
 		if (!cursorKey) {

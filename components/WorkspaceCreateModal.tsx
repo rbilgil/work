@@ -11,10 +11,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 
 interface WorkspaceCreateModalProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
+	organizationId: Id<"organizations">;
 }
 
 const EMOJI_OPTIONS = ["📁", "🚀", "💡", "🎯", "📊", "🔧", "📝", "🎨"];
@@ -22,6 +24,7 @@ const EMOJI_OPTIONS = ["📁", "🚀", "💡", "🎯", "📊", "🔧", "📝", "
 export default function WorkspaceCreateModal({
 	open,
 	onOpenChange,
+	organizationId,
 }: WorkspaceCreateModalProps) {
 	const [name, setName] = useState("");
 	const [description, setDescription] = useState("");
@@ -37,6 +40,7 @@ export default function WorkspaceCreateModal({
 		setCreating(true);
 		try {
 			await createWorkspace({
+				organizationId,
 				name: name.trim(),
 				description: description.trim() || undefined,
 				icon: icon || undefined,

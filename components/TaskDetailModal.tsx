@@ -76,14 +76,12 @@ export default function TaskDetailModal({
 		todoId: todo._id,
 	});
 
-	// Check if user has required integrations
-	const integrations = useQuery(api.integrations.getUserIntegrations);
-	const workspaceRepo = useQuery(api.integrations.getWorkspaceRepo, {
+	// Check if workspace has required integrations for agent
+	const integrationStatus = useQuery(api.integrations.hasRequiredIntegrations, {
 		workspaceId,
 	});
 
-	const hasRequiredIntegrations =
-		integrations?.cursor.connected && workspaceRepo !== null;
+	const hasRequiredIntegrations = integrationStatus?.ready ?? false;
 
 	// Reset form when todo changes
 	useEffect(() => {
@@ -353,9 +351,9 @@ export default function TaskDetailModal({
 						{/* Integration status warning */}
 						{!hasRequiredIntegrations && (
 							<p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-								{!integrations?.cursor.connected &&
+								{integrationStatus && !integrationStatus.cursor &&
 									"Cursor API key not configured. "}
-								{!workspaceRepo && "No GitHub repository connected. "}
+								{integrationStatus && !integrationStatus.repo && "No GitHub repository connected. "}
 								Configure in Settings to use agents.
 							</p>
 						)}

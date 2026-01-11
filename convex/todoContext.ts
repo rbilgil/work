@@ -1,7 +1,27 @@
 import { v } from "convex/values";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalQuery, mutation, query } from "./_generated/server";
 import { getAuthUser, requireAuthUser } from "./auth";
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
+
+// Helper to verify workspace access via organization membership
+async function verifyWorkspaceAccess(
+	ctx: QueryCtx | MutationCtx,
+	workspaceId: Id<"workspaces">,
+	userId: Id<"users">,
+): Promise<boolean> {
+	const workspace = await ctx.db.get(workspaceId);
+	if (!workspace) return false;
+
+	const membership = await ctx.db
+		.query("organization_members")
+		.withIndex("by_org_and_user", (q) =>
+			q.eq("organizationId", workspace.organizationId).eq("userId", userId),
+		)
+		.unique();
+
+	return membership !== null;
+}
 
 // ============ CONTEXT REFERENCES ============
 
@@ -26,14 +46,13 @@ export const setContextRefs = mutation({
 	handler: async (ctx, args) => {
 		const user = await requireAuthUser(ctx);
 
-		// Verify todo ownership
+		// Verify todo access via workspace organization
 		const todo = await ctx.db.get(args.todoId);
 		if (!todo) {
 			throw new Error("Todo not found");
 		}
 
-		const workspace = await ctx.db.get(todo.workspaceId);
-		if (!workspace || workspace.userId !== user._id) {
+		if (!(await verifyWorkspaceAccess(ctx, todo.workspaceId, user._id))) {
 			throw new Error("Unauthorized");
 		}
 
@@ -74,14 +93,13 @@ export const addContextRef = mutation({
 	handler: async (ctx, args) => {
 		const user = await requireAuthUser(ctx);
 
-		// Verify todo ownership
+		// Verify todo access via workspace organization
 		const todo = await ctx.db.get(args.todoId);
 		if (!todo) {
 			throw new Error("Todo not found");
 		}
 
-		const workspace = await ctx.db.get(todo.workspaceId);
-		if (!workspace || workspace.userId !== user._id) {
+		if (!(await verifyWorkspaceAccess(ctx, todo.workspaceId, user._id))) {
 			throw new Error("Unauthorized");
 		}
 
@@ -123,14 +141,13 @@ export const removeContextRef = mutation({
 	handler: async (ctx, args) => {
 		const user = await requireAuthUser(ctx);
 
-		// Verify todo ownership
+		// Verify todo access via workspace organization
 		const todo = await ctx.db.get(args.todoId);
 		if (!todo) {
 			throw new Error("Todo not found");
 		}
 
-		const workspace = await ctx.db.get(todo.workspaceId);
-		if (!workspace || workspace.userId !== user._id) {
+		if (!(await verifyWorkspaceAccess(ctx, todo.workspaceId, user._id))) {
 			throw new Error("Unauthorized");
 		}
 
@@ -173,14 +190,13 @@ export const getContextRefs = query({
 			return [];
 		}
 
-		// Verify todo ownership
+		// Verify todo access via workspace organization
 		const todo = await ctx.db.get(args.todoId);
 		if (!todo) {
 			return [];
 		}
 
-		const workspace = await ctx.db.get(todo.workspaceId);
-		if (!workspace || workspace.userId !== user._id) {
+		if (!(await verifyWorkspaceAccess(ctx, todo.workspaceId, user._id))) {
 			return [];
 		}
 
@@ -249,8 +265,7 @@ export const getTodoWithFullContext = query({
 			return null;
 		}
 
-		const workspace = await ctx.db.get(todo.workspaceId);
-		if (!workspace || workspace.userId !== user._id) {
+		if (!(await verifyWorkspaceAccess(ctx, todo.workspaceId, user._id))) {
 			return null;
 		}
 

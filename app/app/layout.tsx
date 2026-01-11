@@ -1,14 +1,20 @@
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
+import { useQuery } from "convex/react";
 import { Settings, Tornado } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import IntegrationsModal from "@/components/IntegrationsModal";
 import { Button } from "@/components/ui/button";
+import { api } from "../../convex/_generated/api";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
 	const [settingsOpen, setSettingsOpen] = useState(false);
+
+	// Get user's organizations to pass the current one to integrations
+	const organizations = useQuery(api.organizations.listMyOrganizations);
+	const currentOrganization = organizations?.[0];
 
 	return (
 		<div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
@@ -24,6 +30,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 				</Link>
 
 				<div className="flex items-center gap-2">
+					{/* Show current organization name */}
+					{currentOrganization && (
+						<span className="text-sm text-slate-500 dark:text-slate-400 mr-2">
+							{currentOrganization.name}
+						</span>
+					)}
 					<Button
 						variant="ghost"
 						size="icon"
@@ -57,6 +69,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 			<IntegrationsModal
 				open={settingsOpen}
 				onOpenChange={setSettingsOpen}
+				organizationId={currentOrganization?._id}
 			/>
 		</div>
 	);

@@ -1,6 +1,27 @@
 import { v } from "convex/values";
+import type { QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { getAuthUser } from "./auth";
+import type { Id } from "./_generated/dataModel";
+
+// Helper to verify workspace access via organization membership
+async function verifyWorkspaceAccess(
+	ctx: QueryCtx,
+	workspaceId: Id<"workspaces">,
+	userId: Id<"users">,
+): Promise<boolean> {
+	const workspace = await ctx.db.get(workspaceId);
+	if (!workspace) return false;
+
+	const membership = await ctx.db
+		.query("organization_members")
+		.withIndex("by_org_and_user", (q) =>
+			q.eq("organizationId", workspace.organizationId).eq("userId", userId),
+		)
+		.unique();
+
+	return membership !== null;
+}
 
 // ============ INTERNAL QUERIES ============
 
@@ -220,9 +241,10 @@ export const getAgentRunForTodo = query({
 		const todo = await ctx.db.get(args.todoId);
 		if (!todo || !todo.currentAgentRunId) return null;
 
-		// Verify ownership
-		const workspace = await ctx.db.get(todo.workspaceId);
-		if (!workspace || workspace.userId !== user._id) return null;
+		// Verify workspace access via organization membership
+		if (!(await verifyWorkspaceAccess(ctx, todo.workspaceId, user._id))) {
+			return null;
+		}
 
 		const agentRun = await ctx.db.get(todo.currentAgentRunId);
 		if (!agentRun) return null;

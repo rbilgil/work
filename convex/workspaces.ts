@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import {
 	internalMutation,
 	internalQuery,
@@ -7,6 +9,25 @@ import {
 	query,
 } from "./_generated/server";
 import { getAuthUser } from "./auth";
+
+// Helper to verify workspace access via organization membership
+async function verifyWorkspaceAccess(
+	ctx: QueryCtx | MutationCtx,
+	workspaceId: Id<"workspaces">,
+	userId: Id<"users">,
+): Promise<boolean> {
+	const workspace = await ctx.db.get(workspaceId);
+	if (!workspace) return false;
+
+	const membership = await ctx.db
+		.query("organization_members")
+		.withIndex("by_org_and_user", (q) =>
+			q.eq("organizationId", workspace.organizationId).eq("userId", userId),
+		)
+		.unique();
+
+	return membership !== null;
+}
 
 // Shared status validator for workspace todos
 const workspaceTodoStatus = v.union(
@@ -64,6 +85,7 @@ function extractTitleFromUrl(url: string): string {
 
 export const createWorkspace = mutation({
 	args: {
+		organizationId: v.id("organizations"),
 		name: v.string(),
 		description: v.optional(v.string()),
 		icon: v.optional(v.string()),
@@ -76,38 +98,66 @@ export const createWorkspace = mutation({
 			return null;
 		}
 
+		// Verify user is a member of the organization
+		const membership = await ctx.db
+			.query("organization_members")
+			.withIndex("by_org_and_user", (q) =>
+				q.eq("organizationId", args.organizationId).eq("userId", user._id),
+			)
+			.unique();
+
+		if (!membership) {
+			throw new Error("Not a member of this organization");
+		}
+
 		return await ctx.db.insert("workspaces", {
+			organizationId: args.organizationId,
 			name: args.name,
 			description: args.description,
 			icon: args.icon,
 			color: args.color,
-			userId: user._id,
+			createdByUserId: user._id,
 			createdAt: Date.now(),
 		});
 	},
 });
 
 export const listWorkspaces = query({
-	args: {},
+	args: {
+		organizationId: v.id("organizations"),
+	},
 	returns: v.array(
 		v.object({
 			_id: v.id("workspaces"),
 			_creationTime: v.number(),
+			organizationId: v.id("organizations"),
 			name: v.string(),
 			description: v.optional(v.string()),
 			icon: v.optional(v.string()),
 			color: v.optional(v.string()),
-			userId: v.id("users"),
+			createdByUserId: v.id("users"),
 			createdAt: v.number(),
 		}),
 	),
-	handler: async (ctx) => {
+	handler: async (ctx, args) => {
 		const user = await getAuthUser(ctx);
 		if (!user) return [];
 
+		// Verify user is a member of the organization
+		const membership = await ctx.db
+			.query("organization_members")
+			.withIndex("by_org_and_user", (q) =>
+				q.eq("organizationId", args.organizationId).eq("userId", user._id),
+			)
+			.unique();
+
+		if (!membership) return [];
+
 		return await ctx.db
 			.query("workspaces")
-			.withIndex("by_user", (q) => q.eq("userId", user._id))
+			.withIndex("by_organization", (q) =>
+				q.eq("organizationId", args.organizationId),
+			)
 			.order("desc")
 			.collect();
 	},
@@ -119,11 +169,12 @@ export const getWorkspace = query({
 		v.object({
 			_id: v.id("workspaces"),
 			_creationTime: v.number(),
+			organizationId: v.id("organizations"),
 			name: v.string(),
 			description: v.optional(v.string()),
 			icon: v.optional(v.string()),
 			color: v.optional(v.string()),
-			userId: v.id("users"),
+			createdByUserId: v.id("users"),
 			createdAt: v.number(),
 		}),
 		v.null(),
@@ -135,7 +186,18 @@ export const getWorkspace = query({
 		}
 
 		const workspace = await ctx.db.get(args.id);
-		if (!workspace || workspace.userId !== user._id) return null;
+		if (!workspace) return null;
+
+		// Verify user is a member of the workspace's organization
+		const membership = await ctx.db
+			.query("organization_members")
+			.withIndex("by_org_and_user", (q) =>
+				q.eq("organizationId", workspace.organizationId).eq("userId", user._id),
+			)
+			.unique();
+
+		if (!membership) return null;
+
 		return workspace;
 	},
 });
@@ -155,8 +217,9 @@ export const updateWorkspace = mutation({
 			return null;
 		}
 
-		const existing = await ctx.db.get(args.id);
-		if (!existing || existing.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, args.id, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		const update: Record<string, unknown> = {};
 		if (args.name !== undefined) update.name = args.name;
@@ -178,8 +241,9 @@ export const deleteWorkspace = mutation({
 			return null;
 		}
 
-		const existing = await ctx.db.get(args.id);
-		if (!existing || existing.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, args.id, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		// Delete all related data
 		const messages = await ctx.db
@@ -235,8 +299,9 @@ export const createMessage = mutation({
 		}
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(args.workspaceId);
-		if (!workspace || workspace.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, args.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		// Create the message
 		const messageId = await ctx.db.insert("workspace_messages", {
@@ -323,8 +388,8 @@ export const listMessages = query({
 		}
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(args.workspaceId);
-		if (!workspace || workspace.userId !== user._id) return [];
+		if (!(await verifyWorkspaceAccess(ctx, args.workspaceId, user._id)))
+			return [];
 
 		// Get all messages for this workspace
 		const messages = await ctx.db
@@ -373,8 +438,10 @@ export const listReplies = query({
 		const parentMessage = await ctx.db.get(args.parentMessageId);
 		if (!parentMessage) return [];
 
-		const workspace = await ctx.db.get(parentMessage.workspaceId);
-		if (!workspace || workspace.userId !== user._id) return [];
+		if (
+			!(await verifyWorkspaceAccess(ctx, parentMessage.workspaceId, user._id))
+		)
+			return [];
 
 		return await ctx.db
 			.query("workspace_messages")
@@ -451,8 +518,9 @@ export const createDoc = mutation({
 		}
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(args.workspaceId);
-		if (!workspace || workspace.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, args.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		return await ctx.db.insert("workspace_docs", {
 			workspaceId: args.workspaceId,
@@ -485,8 +553,8 @@ export const listDocs = query({
 		}
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(args.workspaceId);
-		if (!workspace || workspace.userId !== user._id) return [];
+		if (!(await verifyWorkspaceAccess(ctx, args.workspaceId, user._id)))
+			return [];
 
 		return await ctx.db
 			.query("workspace_docs")
@@ -521,8 +589,8 @@ export const getDoc = query({
 		if (!doc) return null;
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(doc.workspaceId);
-		if (!workspace || workspace.userId !== user._id) return null;
+		if (!(await verifyWorkspaceAccess(ctx, doc.workspaceId, user._id)))
+			return null;
 
 		return doc;
 	},
@@ -545,8 +613,9 @@ export const updateDoc = mutation({
 		if (!doc) throw new Error("Not found");
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(doc.workspaceId);
-		if (!workspace || workspace.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, doc.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		const update: Record<string, unknown> = { updatedAt: Date.now() };
 		if (args.title !== undefined) update.title = args.title;
@@ -570,8 +639,9 @@ export const deleteDoc = mutation({
 		if (!doc) throw new Error("Not found");
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(doc.workspaceId);
-		if (!workspace || workspace.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, doc.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		await ctx.db.delete(args.id);
 		return null;
@@ -596,8 +666,9 @@ export const createWorkspaceTodo = mutation({
 		}
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(args.workspaceId);
-		if (!workspace || workspace.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, args.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		const targetStatus = args.status ?? "todo";
 
@@ -667,8 +738,8 @@ export const listWorkspaceTodos = query({
 		}
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(args.workspaceId);
-		if (!workspace || workspace.userId !== user._id) return [];
+		if (!(await verifyWorkspaceAccess(ctx, args.workspaceId, user._id)))
+			return [];
 
 		return await ctx.db
 			.query("workspace_todos")
@@ -695,8 +766,9 @@ export const updateWorkspaceTodo = mutation({
 		if (!todo) throw new Error("Not found");
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(todo.workspaceId);
-		if (!workspace || workspace.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, todo.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		const update: Record<string, unknown> = {};
 		if (args.title !== undefined) update.title = args.title;
@@ -732,8 +804,9 @@ export const reorderWorkspaceTodo = mutation({
 		const todo = await ctx.db.get(args.id);
 		if (!todo) throw new Error("Not found");
 
-		const workspace = await ctx.db.get(todo.workspaceId);
-		if (!workspace || workspace.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, todo.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		const update: Record<string, unknown> = {
 			status: args.newStatus,
@@ -766,8 +839,9 @@ export const queueTodoForAgent = mutation({
 		const todo = await ctx.db.get(args.id);
 		if (!todo) throw new Error("Not found");
 
-		const workspace = await ctx.db.get(todo.workspaceId);
-		if (!workspace || workspace.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, todo.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		// Update status and assignee
 		await ctx.db.patch(args.id, {
@@ -798,8 +872,9 @@ export const deleteWorkspaceTodo = mutation({
 		if (!todo) throw new Error("Not found");
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(todo.workspaceId);
-		if (!workspace || workspace.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, todo.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		await ctx.db.delete(args.id);
 		return null;
@@ -830,8 +905,9 @@ export const createLink = mutation({
 		}
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(args.workspaceId);
-		if (!workspace || workspace.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, args.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		return await ctx.db.insert("workspace_links", {
 			workspaceId: args.workspaceId,
@@ -873,8 +949,8 @@ export const listLinks = query({
 		}
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(args.workspaceId);
-		if (!workspace || workspace.userId !== user._id) return [];
+		if (!(await verifyWorkspaceAccess(ctx, args.workspaceId, user._id)))
+			return [];
 
 		return await ctx.db
 			.query("workspace_links")
@@ -897,8 +973,9 @@ export const deleteLink = mutation({
 		if (!link) throw new Error("Not found");
 
 		// Verify workspace access
-		const workspace = await ctx.db.get(link.workspaceId);
-		if (!workspace || workspace.userId !== user._id) throw new Error("Not found");
+		if (!(await verifyWorkspaceAccess(ctx, link.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
 
 		await ctx.db.delete(args.id);
 		return null;

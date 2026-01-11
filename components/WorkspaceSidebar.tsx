@@ -6,17 +6,21 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 
 interface WorkspaceSidebarProps {
+	organizationId: Id<"organizations">;
 	selectedWorkspaceId: Id<"workspaces"> | null;
 	onSelectWorkspace: (id: Id<"workspaces"> | null) => void;
 	onNewWorkspace: () => void;
 }
 
 export default function WorkspaceSidebar({
+	organizationId,
 	selectedWorkspaceId,
 	onSelectWorkspace,
 	onNewWorkspace,
 }: WorkspaceSidebarProps) {
-	const workspaces = useQuery(api.workspaces.listWorkspaces);
+	const workspaces = useQuery(api.workspaces.listWorkspaces, {
+		organizationId,
+	});
 
 	return (
 		<div className="w-64 flex-shrink-0 border-r border-slate-200/70 dark:border-white/10 p-4 flex flex-col gap-4 h-full bg-slate-50/50 dark:bg-slate-900/50">

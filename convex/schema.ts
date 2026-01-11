@@ -13,28 +13,63 @@ export default defineSchema({
 		.index("by_token", ["tokenIdentifier"])
 		.index("by_email", ["email"]),
 
-	// User Integrations - Store API keys and OAuth tokens per user
-	user_integrations: defineTable({
+	// Organizations - Top level container for workspaces and users
+	organizations: defineTable({
+		name: v.string(),
+		slug: v.string(), // URL-friendly identifier
+		icon: v.optional(v.string()), // emoji or icon name
+		createdByUserId: v.id("users"),
+		createdAt: v.number(),
+	})
+		.index("by_slug", ["slug"])
+		.index("by_created_by", ["createdByUserId"]),
+
+	// Organization Members - Links users to organizations with roles
+	organization_members: defineTable({
+		organizationId: v.id("organizations"),
 		userId: v.id("users"),
+		role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member")),
+		joinedAt: v.number(),
+	})
+		.index("by_organization", ["organizationId"])
+		.index("by_user", ["userId"])
+		.index("by_org_and_user", ["organizationId", "userId"]),
+
+	// Organization Integrations - Store API keys and OAuth tokens per organization
+	// One user connects, everyone in the org can use it across all workspaces
+	organization_integrations: defineTable({
+		organizationId: v.id("organizations"),
 		type: v.union(v.literal("github"), v.literal("cursor")),
-		config: v.string(), // Encrypted JSON with credentials
+		// For cursor: stores encrypted API key
+		// For github: stores encrypted access/refresh tokens
+		encryptedAccessToken: v.optional(v.string()), // AES-GCM encrypted
+		encryptedRefreshToken: v.optional(v.string()), // AES-GCM encrypted
+		// Additional metadata stored as encrypted JSON
+		encryptedConfig: v.optional(v.string()), // Encrypted JSON with additional data (e.g., username)
+		// OAuth state for CSRF protection (only set during pending OAuth flow)
+		oauthState: v.optional(v.string()), // Random state value, cleared after successful OAuth
+		oauthStateExpiresAt: v.optional(v.number()), // State expires after 10 minutes
+		// Track who created/updated the integration
+		createdByUserId: v.id("users"),
 		createdAt: v.number(),
 		updatedAt: v.optional(v.number()),
 	})
-		.index("by_user", ["userId"])
-		.index("by_user_and_type", ["userId", "type"]),
+		.index("by_organization", ["organizationId"])
+		.index("by_organization_and_type", ["organizationId", "type"])
+		.index("by_oauth_state", ["oauthState"]),
 
-	// Workspaces - Units of work (like Slack channels but with structured context)
+	// Workspaces - Units of work within an organization
 	workspaces: defineTable({
+		organizationId: v.id("organizations"),
 		name: v.string(),
 		description: v.optional(v.string()),
 		icon: v.optional(v.string()), // emoji or icon name
 		color: v.optional(v.string()), // hex color for visual identification
-		userId: v.id("users"),
+		createdByUserId: v.id("users"),
 		createdAt: v.number(),
 	})
-		.index("by_user", ["userId"])
-		.index("by_user_and_name", ["userId", "name"]),
+		.index("by_organization", ["organizationId"])
+		.index("by_org_and_name", ["organizationId", "name"]),
 
 	// Workspace Repos - Link GitHub repos to workspaces
 	workspace_repos: defineTable({
@@ -42,10 +77,9 @@ export default defineSchema({
 		owner: v.string(), // GitHub owner/org
 		repo: v.string(), // Repository name
 		defaultBranch: v.string(), // e.g., "main"
-		userId: v.id("users"),
+		createdByUserId: v.id("users"),
 		createdAt: v.number(),
-	})
-		.index("by_workspace", ["workspaceId"]),
+	}).index("by_workspace", ["workspaceId"]),
 
 	// Workspace Messages - Chat messages with threading support
 	workspace_messages: defineTable({

@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
-import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { httpAction } from "./_generated/server";
 
 const http = httpRouter();
 
@@ -9,7 +9,7 @@ async function verifyHmacSignature(
 	secret: string,
 	message: string,
 	signature: string,
-	algorithm: "sha256" = "sha256",
+	_algorithm: "sha256" = "sha256",
 ): Promise<boolean> {
 	const encoder = new TextEncoder();
 	const key = await crypto.subtle.importKey(
@@ -21,7 +21,9 @@ async function verifyHmacSignature(
 	);
 	const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
 	const hashArray = Array.from(new Uint8Array(sig));
-	const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+	const hashHex = hashArray
+		.map((b) => b.toString(16).padStart(2, "0"))
+		.join("");
 
 	// Compare in constant time (simple version)
 	return hashHex === signature.toLowerCase();
@@ -76,14 +78,19 @@ http.route({
 				mappedStatus = "creating";
 			} else if (status === "running" || status === "in_progress") {
 				mappedStatus = "running";
-			} else if (status === "finished" || status === "completed" || status === "success") {
+			} else if (
+				status === "finished" ||
+				status === "completed" ||
+				status === "success"
+			) {
 				mappedStatus = "finished";
 			} else if (status === "failed" || status === "error") {
 				mappedStatus = "failed";
 			}
 
 			// Extract PR info if available
-			const prUrl = payload.prUrl || payload.pr?.url || payload.pullRequest?.html_url;
+			const prUrl =
+				payload.prUrl || payload.pr?.url || payload.pullRequest?.html_url;
 			const prNumber =
 				payload.prNumber ||
 				payload.pr?.number ||
@@ -93,14 +100,17 @@ http.route({
 			const errorMessage = payload.error || payload.errorMessage;
 
 			// Update the agent run
-			await ctx.runMutation(internal.agentExecutionMutations.updateAgentRunStatus, {
-				agentRunId: agentRun._id,
-				status: mappedStatus,
-				prUrl,
-				prNumber,
-				summary,
-				errorMessage,
-			});
+			await ctx.runMutation(
+				internal.agentExecutionMutations.updateAgentRunStatus,
+				{
+					agentRunId: agentRun._id,
+					status: mappedStatus,
+					prUrl,
+					prNumber,
+					summary,
+					errorMessage,
+				},
+			);
 
 			return new Response("OK", { status: 200 });
 		} catch (error) {
@@ -180,6 +190,8 @@ http.route({
 	path: "/auth/github/callback",
 	method: "GET",
 	handler: httpAction(async (ctx, request) => {
+		const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
 		try {
 			const url = new URL(request.url);
 			const code = url.searchParams.get("code");
@@ -187,6 +199,10 @@ http.route({
 
 			if (!code) {
 				return new Response("Missing code parameter", { status: 400 });
+			}
+
+			if (!state) {
+				return new Response("Missing state parameter", { status: 400 });
 			}
 
 			// Exchange code for access token
@@ -218,7 +234,9 @@ http.route({
 
 			if (tokenData.error) {
 				console.error("GitHub OAuth error:", tokenData.error);
-				return new Response(`OAuth error: ${tokenData.error}`, { status: 400 });
+				const errorUrl = new URL("/app", appUrl);
+				errorUrl.searchParams.set("github_error", tokenData.error);
+				return Response.redirect(errorUrl.toString(), 302);
 			}
 
 			const accessToken = tokenData.access_token;
@@ -234,25 +252,38 @@ http.route({
 			const userData = await userResponse.json();
 			const username = userData.login;
 
-			// The state should contain the user's Clerk token
-			// We'll use a different approach: redirect to the app with the tokens
-			// The app will then call a mutation to save them
+			// Verify state and persist encrypted tokens to the database
+			// The state was created by initiateGitHubOAuth mutation and links to the user
+			const result = await ctx.runMutation(
+				internal.integrations.completeGitHubOAuth,
+				{
+					state,
+					accessToken,
+					refreshToken: tokenData.refresh_token,
+					username,
+				},
+			);
 
-			// For now, redirect to app with tokens in URL (not ideal, but works for MVP)
-			// In production, use a more secure approach with session cookies
-			const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-			const redirectUrl = new URL("/app", appUrl);
-			redirectUrl.searchParams.set("github_connected", "true");
-			redirectUrl.searchParams.set("github_token", accessToken);
-			redirectUrl.searchParams.set("github_username", username);
-			if (tokenData.refresh_token) {
-				redirectUrl.searchParams.set("github_refresh_token", tokenData.refresh_token);
+			if (!result.success) {
+				console.error("Failed to complete GitHub OAuth:", result.error);
+				const errorUrl = new URL("/app", appUrl);
+				errorUrl.searchParams.set(
+					"github_error",
+					result.error || "Unknown error",
+				);
+				return Response.redirect(errorUrl.toString(), 302);
 			}
 
-			return Response.redirect(redirectUrl.toString(), 302);
+			// Redirect to app without tokens in URL (tokens are now safely stored encrypted in DB)
+			const successUrl = new URL("/app", appUrl);
+			successUrl.searchParams.set("github_connected", "true");
+
+			return Response.redirect(successUrl.toString(), 302);
 		} catch (error) {
 			console.error("Error in GitHub OAuth callback:", error);
-			return new Response("Internal error", { status: 500 });
+			const errorUrl = new URL("/app", appUrl);
+			errorUrl.searchParams.set("github_error", "Internal error");
+			return Response.redirect(errorUrl.toString(), 302);
 		}
 	}),
 });

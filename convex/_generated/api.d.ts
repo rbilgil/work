@@ -13,6 +13,7 @@ import type * as agentExecutionMutations from "../agentExecutionMutations.js";
 import type * as auth from "../auth.js";
 import type * as http from "../http.js";
 import type * as integrations from "../integrations.js";
+import type * as organizations from "../organizations.js";
 import type * as todoContext from "../todoContext.js";
 import type * as todoContextAi from "../todoContextAi.js";
 import type * as workspaceAi from "../workspaceAi.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   http: typeof http;
   integrations: typeof integrations;
+  organizations: typeof organizations;
   todoContext: typeof todoContext;
   todoContextAi: typeof todoContextAi;
   workspaceAi: typeof workspaceAi;
