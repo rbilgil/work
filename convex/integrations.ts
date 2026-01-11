@@ -2,11 +2,13 @@ import type { GenericMutationCtx } from "convex/server";
 import { v } from "convex/values";
 import type { DataModel, Id } from "./_generated/dataModel";
 import {
+	action,
 	internalMutation,
 	internalQuery,
 	mutation,
 	query,
 } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { getAuthUser, requireAuthUser } from "./auth";
 
 // ============ ENCRYPTION HELPERS ============
@@ -410,10 +412,10 @@ export const getOrganizationIntegrations = query({
 		}
 
 		return {
-			cursor: cursorIntegration
+			cursor: cursorIntegration?.encryptedAccessToken
 				? { connected: true as const, createdAt: cursorIntegration.createdAt }
 				: { connected: false as const },
-			github: githubIntegration
+			github: githubIntegration?.encryptedAccessToken
 				? {
 						connected: true as const,
 						username: githubUsername,
@@ -753,5 +755,158 @@ export const getWorkspaceRepoInternal = internalQuery({
 			repo: repo.repo,
 			defaultBranch: repo.defaultBranch,
 		};
+	},
+});
+
+/**
+ * Get decrypted GitHub token for an organization (internal use only)
+ */
+export const getDecryptedGitHubTokenForOrg = internalQuery({
+	args: {
+		organizationId: v.id("organizations"),
+	},
+	returns: v.union(
+		v.object({
+			accessToken: v.string(),
+			username: v.string(),
+		}),
+		v.null(),
+	),
+	handler: async (ctx, args) => {
+		const integration = await ctx.db
+			.query("organization_integrations")
+			.withIndex("by_organization_and_type", (q) =>
+				q.eq("organizationId", args.organizationId).eq("type", "github"),
+			)
+			.unique();
+
+		if (!integration?.encryptedAccessToken) {
+			return null;
+		}
+
+		try {
+			const accessToken = await decryptString(integration.encryptedAccessToken);
+
+			let username = "";
+			if (integration.encryptedConfig) {
+				const decryptedConfig = await decryptString(
+					integration.encryptedConfig,
+				);
+				const config = JSON.parse(decryptedConfig);
+				username = config.username || "";
+			}
+
+			return {
+				accessToken,
+				username,
+			};
+		} catch {
+			return null;
+		}
+	},
+});
+
+/**
+ * Fetch GitHub repositories for the authenticated user
+ */
+export const fetchGitHubRepos = action({
+	args: {
+		organizationId: v.id("organizations"),
+		search: v.optional(v.string()),
+	},
+	returns: v.array(
+		v.object({
+			id: v.number(),
+			fullName: v.string(),
+			owner: v.string(),
+			name: v.string(),
+			defaultBranch: v.string(),
+			private: v.boolean(),
+		}),
+	),
+	handler: async (ctx, args) => {
+		// Get the GitHub token for this organization
+		const tokenData = await ctx.runQuery(
+			internal.integrations.getDecryptedGitHubTokenForOrg,
+			{ organizationId: args.organizationId },
+		);
+
+		if (!tokenData) {
+			throw new Error("GitHub not connected for this organization");
+		}
+
+		// Fetch repos from GitHub API
+		// First fetch user's repos, then if search is provided, also search
+		const headers = {
+			Authorization: `Bearer ${tokenData.accessToken}`,
+			Accept: "application/vnd.github.v3+json",
+		};
+
+		let repos: Array<{
+			id: number;
+			fullName: string;
+			owner: string;
+			name: string;
+			defaultBranch: string;
+			private: boolean;
+		}> = [];
+
+		if (args.search && args.search.length >= 2) {
+			// Search for repos the user has access to
+			const searchResponse = await fetch(
+				`https://api.github.com/search/repositories?q=${encodeURIComponent(args.search)}+in:name&per_page=20&sort=updated`,
+				{ headers },
+			);
+
+			if (searchResponse.ok) {
+				const searchData = await searchResponse.json();
+				repos = searchData.items.map(
+					(repo: {
+						id: number;
+						full_name: string;
+						owner: { login: string };
+						name: string;
+						default_branch: string;
+						private: boolean;
+					}) => ({
+						id: repo.id,
+						fullName: repo.full_name,
+						owner: repo.owner.login,
+						name: repo.name,
+						defaultBranch: repo.default_branch,
+						private: repo.private,
+					}),
+				);
+			}
+		} else {
+			// Fetch user's repos (sorted by recently pushed)
+			const reposResponse = await fetch(
+				"https://api.github.com/user/repos?per_page=30&sort=pushed&affiliation=owner,collaborator,organization_member",
+				{ headers },
+			);
+
+			if (reposResponse.ok) {
+				const reposData = await reposResponse.json();
+				repos = reposData.map(
+					(repo: {
+						id: number;
+						full_name: string;
+						owner: { login: string };
+						name: string;
+						default_branch: string;
+						private: boolean;
+					}) => ({
+						id: repo.id,
+						fullName: repo.full_name,
+						owner: repo.owner.login,
+						name: repo.name,
+						defaultBranch: repo.default_branch,
+						private: repo.private,
+					}),
+				);
+			}
+		}
+
+		return repos;
 	},
 });

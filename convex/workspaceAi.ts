@@ -27,12 +27,10 @@ const TaskDescriptionSchema = z.object({
 		),
 	suggestedSteps: z
 		.array(z.string())
-		.optional()
-		.describe("Optional list of concrete next steps to complete this task"),
+		.describe("List of concrete next steps to complete this task. Can be empty array if not applicable."),
 	relevantContext: z
 		.string()
-		.optional()
-		.describe("Key context from the chat that informed this description"),
+		.describe("Key context from the chat that informed this description. Can be empty string if no relevant context."),
 });
 
 const AgentPromptSchema = z.object({
@@ -49,8 +47,8 @@ const AgentPromptSchema = z.object({
 
 type TaskDescriptionResult = {
 	description: string;
-	suggestedSteps?: string[];
-	relevantContext?: string;
+	suggestedSteps: string[];
+	relevantContext: string;
 };
 
 export const generateTaskDescription = action({
@@ -61,8 +59,8 @@ export const generateTaskDescription = action({
 	},
 	returns: v.object({
 		description: v.string(),
-		suggestedSteps: v.optional(v.array(v.string())),
-		relevantContext: v.optional(v.string()),
+		suggestedSteps: v.array(v.string()),
+		relevantContext: v.string(),
 	}),
 	handler: async (ctx, args): Promise<TaskDescriptionResult> => {
 		// Verify user is authenticated
@@ -71,6 +69,24 @@ export const generateTaskDescription = action({
 			throw new Error("Unauthorized");
 		}
 
+		// Delegate to internal action
+		return await ctx.runAction(internal.workspaceAi.generateTaskDescriptionInternal, args);
+	},
+});
+
+// Internal version for use by other internal actions (no auth check)
+export const generateTaskDescriptionInternal = internalAction({
+	args: {
+		workspaceId: v.id("workspaces"),
+		todoId: v.id("workspace_todos"),
+		taskTitle: v.string(),
+	},
+	returns: v.object({
+		description: v.string(),
+		suggestedSteps: v.array(v.string()),
+		relevantContext: v.string(),
+	}),
+	handler: async (ctx, args): Promise<TaskDescriptionResult> => {
 		const model = selectModel();
 
 		// Fetch all messages in workspace for context
@@ -127,7 +143,7 @@ export const generateAndUpdateDescription = internalAction({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		try {
-			const result = await ctx.runAction(api.workspaceAi.generateTaskDescription, {
+			const result = await ctx.runAction(internal.workspaceAi.generateTaskDescriptionInternal, {
 				workspaceId: args.workspaceId,
 				todoId: args.todoId,
 				taskTitle: args.taskTitle,

@@ -63,7 +63,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 			</header>
 
 			{/* App Content */}
-			<main className="flex-1 p-4">{children}</main>
+			<main className="flex-1">{children}</main>
 
 			{/* Global Settings/Integrations Modal */}
 			<IntegrationsModal

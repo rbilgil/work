@@ -94,7 +94,7 @@ export default function Work() {
 	}
 
 	return (
-		<div className="flex h-[calc(100vh-5rem)] max-w-7xl mx-auto border border-slate-200/70 dark:border-white/10 rounded-lg overflow-hidden bg-white dark:bg-slate-950">
+		<div className="flex h-[calc(100vh-3.5rem)] border-t border-slate-200/70 dark:border-white/10 overflow-hidden bg-white dark:bg-slate-950">
 			{/* Left Sidebar - Workspace List */}
 			<WorkspaceSidebar
 				organizationId={currentOrganization._id}
