@@ -303,12 +303,61 @@ export const completeGitHubOAuth = internalMutation({
 });
 
 /**
+ * Save Notion API token for an organization
+ * Users need to create an internal integration at https://www.notion.so/my-integrations
+ * and share the pages they want to access with the integration
+ */
+export const saveNotionApiToken = mutation({
+	args: {
+		organizationId: v.id("organizations"),
+		apiToken: v.string(),
+	},
+	returns: v.boolean(),
+	handler: async (ctx, args) => {
+		const user = await requireAuthUser(ctx);
+
+		// Verify organization membership
+		if (!(await verifyOrgMembership(ctx, args.organizationId, user._id))) {
+			throw new Error("Organization not found or access denied");
+		}
+
+		// Check if integration already exists
+		const existing = await ctx.db
+			.query("organization_integrations")
+			.withIndex("by_organization_and_type", (q) =>
+				q.eq("organizationId", args.organizationId).eq("type", "notion"),
+			)
+			.unique();
+
+		// Encrypt the API token
+		const encryptedAccessToken = await encryptString(args.apiToken);
+
+		if (existing) {
+			await ctx.db.patch(existing._id, {
+				encryptedAccessToken,
+				updatedAt: Date.now(),
+			});
+		} else {
+			await ctx.db.insert("organization_integrations", {
+				organizationId: args.organizationId,
+				type: "notion",
+				encryptedAccessToken,
+				createdByUserId: user._id,
+				createdAt: Date.now(),
+			});
+		}
+
+		return true;
+	},
+});
+
+/**
  * Remove an integration from an organization
  */
 export const removeIntegration = mutation({
 	args: {
 		organizationId: v.id("organizations"),
-		type: v.union(v.literal("github"), v.literal("cursor")),
+		type: v.union(v.literal("github"), v.literal("cursor"), v.literal("notion")),
 	},
 	returns: v.boolean(),
 	handler: async (ctx, args) => {
@@ -361,6 +410,15 @@ export const getOrganizationIntegrations = query({
 				connected: v.literal(false),
 			}),
 		),
+		notion: v.union(
+			v.object({
+				connected: v.literal(true),
+				createdAt: v.number(),
+			}),
+			v.object({
+				connected: v.literal(false),
+			}),
+		),
 	}),
 	handler: async (ctx, args) => {
 		const user = await getAuthUser(ctx);
@@ -368,6 +426,7 @@ export const getOrganizationIntegrations = query({
 			return {
 				cursor: { connected: false as const },
 				github: { connected: false as const },
+				notion: { connected: false as const },
 			};
 		}
 
@@ -383,6 +442,7 @@ export const getOrganizationIntegrations = query({
 			return {
 				cursor: { connected: false as const },
 				github: { connected: false as const },
+				notion: { connected: false as const },
 			};
 		}
 
@@ -395,6 +455,7 @@ export const getOrganizationIntegrations = query({
 
 		const cursorIntegration = integrations.find((i) => i.type === "cursor");
 		const githubIntegration = integrations.find((i) => i.type === "github");
+		const notionIntegration = integrations.find((i) => i.type === "notion");
 
 		let githubUsername = "";
 		if (githubIntegration?.encryptedConfig) {
@@ -419,6 +480,9 @@ export const getOrganizationIntegrations = query({
 						username: githubUsername,
 						createdAt: githubIntegration.createdAt,
 					}
+				: { connected: false as const },
+			notion: notionIntegration
+				? { connected: true as const, createdAt: notionIntegration.createdAt }
 				: { connected: false as const },
 		};
 	},
@@ -753,5 +817,66 @@ export const getWorkspaceRepoInternal = internalQuery({
 			repo: repo.repo,
 			defaultBranch: repo.defaultBranch,
 		};
+	},
+});
+
+/**
+ * Get decrypted Notion API token for a workspace (internal use only)
+ * Looks up the workspace's organization and gets the integration from there
+ */
+export const getDecryptedNotionToken = internalQuery({
+	args: {
+		workspaceId: v.id("workspaces"),
+	},
+	returns: v.union(v.string(), v.null()),
+	handler: async (ctx, args) => {
+		// Get workspace to find its organization
+		const workspace = await ctx.db.get(args.workspaceId);
+		if (!workspace) return null;
+
+		const integration = await ctx.db
+			.query("organization_integrations")
+			.withIndex("by_organization_and_type", (q) =>
+				q.eq("organizationId", workspace.organizationId).eq("type", "notion"),
+			)
+			.unique();
+
+		if (!integration?.encryptedAccessToken) {
+			return null;
+		}
+
+		try {
+			return await decryptString(integration.encryptedAccessToken);
+		} catch {
+			return null;
+		}
+	},
+});
+
+/**
+ * Get decrypted Notion API token by organization ID (internal use only)
+ */
+export const getDecryptedNotionTokenByOrg = internalQuery({
+	args: {
+		organizationId: v.id("organizations"),
+	},
+	returns: v.union(v.string(), v.null()),
+	handler: async (ctx, args) => {
+		const integration = await ctx.db
+			.query("organization_integrations")
+			.withIndex("by_organization_and_type", (q) =>
+				q.eq("organizationId", args.organizationId).eq("type", "notion"),
+			)
+			.unique();
+
+		if (!integration?.encryptedAccessToken) {
+			return null;
+		}
+
+		try {
+			return await decryptString(integration.encryptedAccessToken);
+		} catch {
+			return null;
+		}
 	},
 });

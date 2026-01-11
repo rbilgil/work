@@ -111,13 +111,14 @@ export default function ContextSidebar({
 						docs?.map((doc) => (
 							<DocItem
 								key={doc._id}
-								doc={
-									doc as {
-										_id: Id<"workspace_docs">;
-										title: string;
-										content: string;
-									}
-								}
+								doc={{
+									_id: doc._id,
+									title: doc.title,
+									content: doc.content,
+									sourceUrl: (doc as { sourceUrl?: string }).sourceUrl,
+									sourceType: (doc as { sourceType?: "notion" | "manual" }).sourceType,
+									lastFetchedAt: (doc as { lastFetchedAt?: number }).lastFetchedAt,
+								}}
 							/>
 						))
 					)}

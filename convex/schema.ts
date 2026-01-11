@@ -39,7 +39,7 @@ export default defineSchema({
 	// One user connects, everyone in the org can use it across all workspaces
 	organization_integrations: defineTable({
 		organizationId: v.id("organizations"),
-		type: v.union(v.literal("github"), v.literal("cursor")),
+		type: v.union(v.literal("github"), v.literal("cursor"), v.literal("notion")),
 		// For cursor: stores encrypted API key
 		// For github: stores encrypted access/refresh tokens
 		encryptedAccessToken: v.optional(v.string()), // AES-GCM encrypted
@@ -99,12 +99,17 @@ export default defineSchema({
 		workspaceId: v.id("workspaces"),
 		title: v.string(),
 		content: v.string(), // markdown content
+		// For imported docs (e.g., from Notion)
+		sourceUrl: v.optional(v.string()), // Original URL (for Notion docs, etc.)
+		sourceType: v.optional(v.union(v.literal("notion"), v.literal("manual"))),
+		lastFetchedAt: v.optional(v.number()), // When content was last fetched from source
 		userId: v.id("users"),
 		createdAt: v.number(),
 		updatedAt: v.optional(v.number()),
 	})
 		.index("by_workspace", ["workspaceId"])
-		.index("by_user", ["userId"]),
+		.index("by_user", ["userId"])
+		.index("by_source_url", ["sourceUrl"]),
 
 	// Workspace Todos - Todos specific to a workspace (Kanban style)
 	workspace_todos: defineTable({
