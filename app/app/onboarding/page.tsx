@@ -14,10 +14,19 @@ export default function OnboardingPage() {
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 
-	const onboardingStatus = useQuery(api.organizations.needsOnboarding);
+	// This mutation creates the user + org if they don't exist
+	const ensureUser = useMutation(api.organizations.ensureUser);
 	const completeOnboarding = useMutation(api.organizations.completeOnboarding);
 
-	// Redirect if onboarding is not needed
+	// Create user+org on page load
+	useEffect(() => {
+		ensureUser();
+	}, [ensureUser]);
+
+	// Check onboarding status (will return data once user+org exist)
+	const onboardingStatus = useQuery(api.organizations.needsOnboarding);
+
+	// Redirect if onboarding is already complete
 	useEffect(() => {
 		if (onboardingStatus && !onboardingStatus.needsOnboarding) {
 			router.replace("/app");
@@ -46,18 +55,13 @@ export default function OnboardingPage() {
 		}
 	};
 
-	// Show loading while checking onboarding status
-	if (onboardingStatus === undefined) {
+	// Show loading while creating user or checking status
+	if (!onboardingStatus || !onboardingStatus.needsOnboarding) {
 		return (
 			<div className="min-h-[calc(100vh-5rem)] flex items-center justify-center">
 				<Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
 			</div>
 		);
-	}
-
-	// If onboarding is not needed, show nothing (will redirect)
-	if (!onboardingStatus || !onboardingStatus.needsOnboarding) {
-		return null;
 	}
 
 	return (
@@ -134,4 +138,3 @@ export default function OnboardingPage() {
 		</div>
 	);
 }
-

@@ -9,7 +9,6 @@ async function verifyHmacSignature(
 	secret: string,
 	message: string,
 	signature: string,
-	_algorithm: "sha256" = "sha256",
 ): Promise<boolean> {
 	const encoder = new TextEncoder();
 	const key = await crypto.subtle.importKey(

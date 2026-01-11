@@ -2,9 +2,9 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 
 /**
- * Gets the authenticated user from Clerk and ensures they exist in the database.
- * Creates the user if they don't exist (upsert by token identifier).
- * Also creates a default organization for new users.
+ * Gets the authenticated user from the database.
+ * Users are created by the Clerk webhook when they sign up.
+ * Falls back to creating the user in mutation context if webhook hasn't run yet.
  *
  * @param ctx - The Convex context (query, mutation, or action)
  * @returns The user document or null if not authenticated
@@ -27,15 +27,15 @@ export async function getAuthUser(
 		return existingUser;
 	}
 
-	// For queries, we can't create users - return null
-	// The user will be created on their first mutation
+	// User doesn't exist yet - for queries, return null
+	// For mutations, create the user as a fallback (in case webhook hasn't run yet)
 	if (!("insert" in ctx.db)) {
 		return null;
 	}
 
 	const mutationCtx = ctx as MutationCtx;
 
-	// Create user on first mutation
+	// Fallback: Create user if webhook hasn't created them yet
 	const userId = await mutationCtx.db.insert("users", {
 		tokenIdentifier: identity.subject,
 		email: identity.email ?? "",
@@ -46,10 +46,9 @@ export async function getAuthUser(
 	if (!newUser) return null;
 
 	// Create a default organization for the new user
-	// The name will be empty initially - the user will set it in onboarding
 	const orgId = await mutationCtx.db.insert("organizations", {
 		name: "", // Will be set during onboarding
-		slug: `org-${userId}`, // Temporary slug, will be updated during onboarding
+		slug: `org-${userId}`,
 		createdByUserId: userId,
 		createdAt: Date.now(),
 	});

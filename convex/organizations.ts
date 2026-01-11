@@ -2,6 +2,23 @@ import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
 import { getAuthUser, requireAuthUser } from "./auth";
 
+// ============ USER INITIALIZATION ============
+
+/**
+ * Ensure the current user exists in the database with an organization.
+ * This should be called when the app loads to trigger user creation.
+ * Returns true if user exists (or was created), false if not authenticated.
+ */
+export const ensureUser = mutation({
+	args: {},
+	returns: v.boolean(),
+	handler: async (ctx) => {
+		// getAuthUser will create the user and org if they don't exist (in mutation context)
+		const user = await getAuthUser(ctx);
+		return user !== null;
+	},
+});
+
 // ============ ONBOARDING ============
 
 /**
@@ -83,8 +100,7 @@ export const completeOnboarding = mutation({
 			args.name
 				.toLowerCase()
 				.replace(/[^a-z0-9]+/g, "-")
-				.replace(/^-|-$/g, "") +
-				`-${Date.now().toString(36)}`;
+				.replace(/^-|-$/g, "") + `-${Date.now().toString(36)}`;
 
 		// Check if slug is already taken
 		const existingSlug = await ctx.db
@@ -204,7 +220,11 @@ export const getOrganization = query({
 			slug: v.string(),
 			icon: v.optional(v.string()),
 			createdAt: v.number(),
-			role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member")),
+			role: v.union(
+				v.literal("owner"),
+				v.literal("admin"),
+				v.literal("member"),
+			),
 		}),
 		v.null(),
 	),
@@ -250,7 +270,11 @@ export const getOrganizationBySlug = query({
 			slug: v.string(),
 			icon: v.optional(v.string()),
 			createdAt: v.number(),
-			role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member")),
+			role: v.union(
+				v.literal("owner"),
+				v.literal("admin"),
+				v.literal("member"),
+			),
 		}),
 		v.null(),
 	),
@@ -298,7 +322,11 @@ export const listMyOrganizations = query({
 			slug: v.string(),
 			icon: v.optional(v.string()),
 			createdAt: v.number(),
-			role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member")),
+			role: v.union(
+				v.literal("owner"),
+				v.literal("admin"),
+				v.literal("member"),
+			),
 		}),
 	),
 	handler: async (ctx) => {
@@ -505,7 +533,11 @@ export const listMembers = query({
 			userId: v.id("users"),
 			name: v.optional(v.string()),
 			email: v.string(),
-			role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member")),
+			role: v.union(
+				v.literal("owner"),
+				v.literal("admin"),
+				v.literal("member"),
+			),
 			joinedAt: v.number(),
 		}),
 	),
@@ -583,4 +615,3 @@ export const getOrgIdForWorkspace = internalQuery({
 		return workspace?.organizationId ?? null;
 	},
 });
-

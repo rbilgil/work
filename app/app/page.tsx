@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { LayoutGrid, Loader2, MessageSquare } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import ContextSidebar from "@/components/ContextSidebar";
 import KanbanBoard from "@/components/KanbanBoard";
@@ -31,7 +31,6 @@ type Todo = {
 };
 
 export default function Work() {
-	const router = useRouter();
 	const [selectedWorkspaceId, setSelectedWorkspaceId] =
 		useState<Id<"workspaces"> | null>(null);
 	const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
@@ -40,13 +39,10 @@ export default function Work() {
 	const [viewMode, setViewMode] = useState<ViewMode>("chat");
 	const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
 
-	// Check onboarding status
-	const onboardingStatus = useQuery(api.organizations.needsOnboarding);
-
 	// Get user's organizations
 	const organizations = useQuery(api.organizations.listMyOrganizations);
 
-	// Use the first organization for now (later can add org switcher)
+	// Use the first organization
 	const currentOrganization = organizations?.[0];
 
 	// Get workspaces for the current organization
@@ -54,13 +50,6 @@ export default function Work() {
 		api.workspaces.listWorkspaces,
 		currentOrganization ? { organizationId: currentOrganization._id } : "skip",
 	);
-
-	// Redirect to onboarding if needed
-	useEffect(() => {
-		if (onboardingStatus?.needsOnboarding) {
-			router.replace("/app/onboarding");
-		}
-	}, [onboardingStatus, router]);
 
 	// Auto-select first workspace
 	useEffect(() => {
@@ -76,8 +65,8 @@ export default function Work() {
 		}
 	}, [viewMode]);
 
-	// Show loading while checking onboarding
-	if (onboardingStatus === undefined || organizations === undefined) {
+	// Show loading while fetching organizations
+	if (organizations === undefined) {
 		return (
 			<div className="flex h-[calc(100vh-5rem)] items-center justify-center">
 				<Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
@@ -85,16 +74,21 @@ export default function Work() {
 		);
 	}
 
-	// If needs onboarding, show nothing (will redirect)
-	if (onboardingStatus?.needsOnboarding) {
-		return null;
-	}
-
-	// If no organizations, show nothing (shouldn't happen)
+	// No organization - user needs to complete onboarding
 	if (!currentOrganization) {
 		return (
-			<div className="flex h-[calc(100vh-5rem)] items-center justify-center text-slate-500">
-				<p>No organization found. Please refresh the page.</p>
+			<div className="flex h-[calc(100vh-5rem)] items-center justify-center">
+				<div className="text-center">
+					<p className="text-lg text-slate-700 dark:text-slate-300 mb-4">
+						Please complete onboarding first.
+					</p>
+					<Link
+						href="/app/onboarding"
+						className="text-indigo-600 hover:text-indigo-700 font-medium"
+					>
+						Go to Onboarding →
+					</Link>
+				</div>
 			</div>
 		);
 	}
