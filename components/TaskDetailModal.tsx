@@ -104,6 +104,7 @@ export default function TaskDetailModal({
 				existingRefs.map((ref) => ({
 					refType: ref.refType,
 					refId: ref.refId,
+					title: ref.title,
 				})),
 			);
 		}

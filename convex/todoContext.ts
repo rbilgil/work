@@ -171,7 +171,7 @@ export const removeContextRef = mutation({
 });
 
 /**
- * Get context references for a todo
+ * Get context references for a todo with resolved titles
  */
 export const getContextRefs = query({
 	args: {
@@ -181,6 +181,7 @@ export const getContextRefs = query({
 		v.object({
 			refType: v.union(v.literal("doc"), v.literal("message"), v.literal("link")),
 			refId: v.string(),
+			title: v.string(),
 			createdAt: v.number(),
 		}),
 	),
@@ -205,11 +206,39 @@ export const getContextRefs = query({
 			.withIndex("by_todo", (q) => q.eq("todoId", args.todoId))
 			.collect();
 
-		return refs.map((ref) => ({
-			refType: ref.refType,
-			refId: ref.refId,
-			createdAt: ref.createdAt,
-		}));
+		// Resolve titles for each reference
+		const resolvedRefs = await Promise.all(
+			refs.map(async (ref) => {
+				let title = ref.refId; // Fallback to ID
+
+				if (ref.refType === "doc") {
+					const doc = await ctx.db.get(ref.refId as Id<"workspace_docs">);
+					if (doc) {
+						title = doc.title;
+					}
+				} else if (ref.refType === "message") {
+					const message = await ctx.db.get(ref.refId as Id<"workspace_messages">);
+					if (message) {
+						// Use first 50 chars of message content as title
+						title = message.content.slice(0, 50) + (message.content.length > 50 ? "..." : "");
+					}
+				} else if (ref.refType === "link") {
+					const link = await ctx.db.get(ref.refId as Id<"workspace_links">);
+					if (link) {
+						title = link.title;
+					}
+				}
+
+				return {
+					refType: ref.refType,
+					refId: ref.refId,
+					title,
+					createdAt: ref.createdAt,
+				};
+			}),
+		);
+
+		return resolvedRefs;
 	},
 });
 
