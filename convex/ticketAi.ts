@@ -292,37 +292,54 @@ Focus on what needs to be done, not extensive background.`,
 				console.log("[TICKET-GEN] Context refs saved");
 			}
 
-			// 6. Start Cursor planning agent to generate the implementation plan
-			// This is async - the plan will arrive via webhook
-			console.log("\n[TICKET-GEN] Step 6: Starting Cursor planning agent...");
-			console.log("[TICKET-GEN] Calling startCursorPlanningAgent for todo:", args.todoId);
-			const cursorStartTime = Date.now();
-			const planResult = await ctx.runAction(api.agentExecution.startCursorPlanningAgent, {
-				todoId: args.todoId,
-			});
-			console.log("[TICKET-GEN] Cursor agent call returned in", Date.now() - cursorStartTime, "ms");
-			console.log("[TICKET-GEN] Cursor result:", planResult);
+			// 6. Generate implementation plan using OpenCode in E2B sandbox
+			console.log("\n[TICKET-GEN] Step 6: Generating plan with OpenCode...");
+			const opencodeStartTime = Date.now();
 
-			if (!planResult.success) {
-				// Cursor planning failed - fall back to LLM plan generation
-				console.warn("[TICKET-GEN] Cursor planning failed, falling back to LLM:", planResult.error);
+			// Set plan status to generating
+			await ctx.runMutation(internal.agentExecutionMutations.updateTodoForPlanningStart, {
+				todoId: args.todoId,
+				agentRunId: undefined, // No agent run for OpenCode
+			});
+
+			const planResult = await ctx.runAction(internal.opencodePlanning.generatePlanWithOpenCode, {
+				todoId: args.todoId,
+				workspaceId: args.workspaceId,
+			});
+			console.log("[TICKET-GEN] OpenCode call returned in", Date.now() - opencodeStartTime, "ms");
+			console.log("[TICKET-GEN] OpenCode result:", { success: planResult.success, planLength: planResult.plan?.length, error: planResult.error });
+
+			if (planResult.success && planResult.plan) {
+				// Save the plan
+				console.log("[TICKET-GEN] Saving plan to database...");
+				await ctx.runMutation(internal.agentExecutionMutations.updateTodoWithPlan, {
+					todoId: args.todoId,
+					plan: planResult.plan,
+				});
+				console.log("[TICKET-GEN] Plan saved");
+
+				// Generate sub-tasks from the plan
+				console.log("[TICKET-GEN] Generating sub-tasks...");
+				await ctx.runAction(internal.ticketAi.generateSubTasksFromPlan, {
+					todoId: args.todoId,
+					plan: planResult.plan,
+				});
+				console.log("[TICKET-GEN] Sub-tasks generated");
+			} else {
+				// OpenCode failed - fall back to LLM plan generation
+				console.warn("[TICKET-GEN] OpenCode failed, falling back to LLM:", planResult.error);
 				console.log("[TICKET-GEN] Starting LLM fallback for plan generation...");
 				await ctx.runAction(internal.ticketAi.generatePlanWithLLM, {
 					todoId: args.todoId,
 					workspaceId: args.workspaceId,
 				});
 				console.log("[TICKET-GEN] LLM fallback completed");
-			} else {
-				console.log("[TICKET-GEN] Cursor agent started successfully. Agent run ID:", planResult.agentRunId);
-				console.log("[TICKET-GEN] Plan will arrive via webhook when Cursor finishes analyzing the codebase");
 			}
 
 			const totalTime = Date.now() - startTime;
 			console.log("\n" + "=".repeat(60));
 			console.log("[TICKET-GEN] Pipeline complete in", totalTime, "ms");
-			console.log("[TICKET-GEN] Awaiting Cursor webhook for plan...");
 			console.log("=".repeat(60) + "\n");
-			// If successful, plan will arrive via webhook and trigger sub-task generation
 		} catch (error) {
 			console.error("Failed to generate ticket from prompt:", error);
 			// Update todo with error state
@@ -683,33 +700,52 @@ Focus on what needs to be done, not extensive background.`,
 			});
 			console.log("[REGEN] Existing sub-tasks deleted");
 
-			// 4. Start Cursor planning agent (same as initial generation)
-			// Plan and sub-tasks will arrive via webhook
-			console.log("\n[REGEN] Step 4: Starting Cursor planning agent...");
-			const cursorStartTime = Date.now();
-			const planResult = await ctx.runAction(api.agentExecution.startCursorPlanningAgent, {
-				todoId: args.todoId,
-			});
-			console.log("[REGEN] Cursor agent call returned in", Date.now() - cursorStartTime, "ms");
-			console.log("[REGEN] Cursor result:", planResult);
+			// 4. Generate plan with OpenCode
+			console.log("\n[REGEN] Step 4: Generating plan with OpenCode...");
 
-			if (!planResult.success) {
-				// Cursor planning failed - fall back to LLM plan generation
-				console.warn("[REGEN] Cursor planning failed, falling back to LLM:", planResult.error);
+			// Set plan status to generating
+			await ctx.runMutation(internal.agentExecutionMutations.updateTodoForPlanningStart, {
+				todoId: args.todoId,
+				agentRunId: undefined,
+			});
+
+			const opencodeStartTime = Date.now();
+			const planResult = await ctx.runAction(internal.opencodePlanning.generatePlanWithOpenCode, {
+				todoId: args.todoId,
+				workspaceId: todo.workspaceId as any,
+			});
+			console.log("[REGEN] OpenCode call returned in", Date.now() - opencodeStartTime, "ms");
+			console.log("[REGEN] OpenCode result:", { success: planResult.success, planLength: planResult.plan?.length, error: planResult.error });
+
+			if (planResult.success && planResult.plan) {
+				// Save the plan
+				console.log("[REGEN] Saving plan to database...");
+				await ctx.runMutation(internal.agentExecutionMutations.updateTodoWithPlan, {
+					todoId: args.todoId,
+					plan: planResult.plan,
+				});
+				console.log("[REGEN] Plan saved");
+
+				// Generate sub-tasks from the plan
+				console.log("[REGEN] Generating sub-tasks...");
+				await ctx.runAction(internal.ticketAi.generateSubTasksFromPlan, {
+					todoId: args.todoId,
+					plan: planResult.plan,
+				});
+				console.log("[REGEN] Sub-tasks generated");
+			} else {
+				// OpenCode failed - fall back to LLM plan generation
+				console.warn("[REGEN] OpenCode failed, falling back to LLM:", planResult.error);
 				await ctx.runAction(internal.ticketAi.generatePlanWithLLM, {
 					todoId: args.todoId,
 					workspaceId: todo.workspaceId as any,
 				});
 				console.log("[REGEN] LLM fallback completed");
-			} else {
-				console.log("[REGEN] Cursor agent started. Agent run ID:", planResult.agentRunId);
-				console.log("[REGEN] Plan and sub-tasks will arrive via webhook");
 			}
 
 			const totalTime = Date.now() - startTime;
 			console.log("\n" + "=".repeat(60));
-			console.log("[REGEN] Regeneration initiated in", totalTime, "ms");
-			console.log("[REGEN] Awaiting Cursor webhook for plan...");
+			console.log("[REGEN] Regeneration complete in", totalTime, "ms");
 			console.log("=".repeat(60) + "\n");
 
 			return { success: true };

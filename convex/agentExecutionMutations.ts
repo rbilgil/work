@@ -94,7 +94,7 @@ export const updateTodoForAgentStart = internalMutation({
 export const updateTodoForPlanningStart = internalMutation({
 	args: {
 		todoId: v.id("workspace_todos"),
-		agentRunId: v.id("agent_runs"),
+		agentRunId: v.optional(v.id("agent_runs")),
 	},
 	handler: async (ctx, args) => {
 		await ctx.db.patch(args.todoId, {

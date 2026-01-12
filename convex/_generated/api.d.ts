@@ -14,6 +14,7 @@ import type * as auth from "../auth.js";
 import type * as http from "../http.js";
 import type * as integrations from "../integrations.js";
 import type * as mcp from "../mcp.js";
+import type * as opencodePlanning from "../opencodePlanning.js";
 import type * as organizations from "../organizations.js";
 import type * as ticketAi from "../ticketAi.js";
 import type * as todoComments from "../todoComments.js";
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   integrations: typeof integrations;
   mcp: typeof mcp;
+  opencodePlanning: typeof opencodePlanning;
   organizations: typeof organizations;
   ticketAi: typeof ticketAi;
   todoComments: typeof todoComments;
