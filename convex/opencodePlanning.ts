@@ -204,37 +204,113 @@ export const generatePlanWithOpenCode = internalAction({
 				);
 			}
 
-			// Run OpenCode to generate the plan
-			console.log("\n[OPENCODE] Running OpenCode to generate plan...");
+			// Configure OpenCode for plan mode (no file modifications)
+			console.log("\n[OPENCODE] Configuring OpenCode for plan mode...");
+			const opencodeConfig = {
+				mode: {
+					plan: {
+						model: "google/gemini-3-flash",
+						tools: {
+							write: false,
+							edit: false,
+							patch: false,
+							bash: false,
+						},
+					},
+				},
+			};
+			await sandbox.files.write(
+				"/home/user/workspace/opencode.json",
+				JSON.stringify(opencodeConfig, null, 2),
+			);
+			console.log("[OPENCODE] Plan mode config written");
+
+			// Start OpenCode server and use HTTP API for clean output
+			console.log("\n[OPENCODE] Starting OpenCode server...");
 			const opencodeStartTime = Date.now();
+			const serverPort = 4096;
 
-			// Escape the prompt for shell
-			const escapedPrompt = planningPrompt
-				.replace(/\\/g, "\\\\")
-				.replace(/"/g, '\\"')
-				.replace(/\$/g, "\\$")
-				.replace(/`/g, "\\`");
+			// Start server in background using nohup
+			sandbox.commands
+				.run(
+					`cd /home/user/workspace && export OPENAI_API_KEY="${openaiApiKey}" && nohup /home/user/.opencode/bin/opencode serve --port ${serverPort} --hostname 0.0.0.0 > /tmp/opencode.log 2>&1 &`,
+					{ timeoutMs: 5000 },
+				)
+				.catch(() => {
+					// Expected - command backgrounds immediately
+				});
 
-			const opencodeCommand = `cd /home/user/workspace && export OPENAI_API_KEY="${openaiApiKey}" && /home/user/.opencode/bin/opencode run "${escapedPrompt}" 2>&1`;
+			// Wait for server to be ready
+			console.log("[OPENCODE] Waiting for server to start...");
+			let serverReady = false;
+			for (let i = 0; i < 30; i++) {
+				const healthCheck = await sandbox.commands.run(
+					`curl -s http://localhost:${serverPort}/config || echo "not ready"`,
+					{ timeoutMs: 5000 },
+				);
+				if (
+					healthCheck.exitCode === 0 &&
+					!healthCheck.stdout.includes("not ready")
+				) {
+					serverReady = true;
+					break;
+				}
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+			}
 
-			const opencodeResult = await sandbox.commands.run(opencodeCommand, {
-				timeoutMs: COMMAND_TIMEOUT_MS,
+			if (!serverReady) {
+				throw new Error("OpenCode server failed to start");
+			}
+			console.log("[OPENCODE] Server ready");
+
+			// Create a new session
+			console.log("[OPENCODE] Creating session...");
+			const createSessionResult = await sandbox.commands.run(
+				`curl -s -X POST http://localhost:${serverPort}/session`,
+				{ timeoutMs: 10000 },
+			);
+			const sessionData = JSON.parse(createSessionResult.stdout);
+			const sessionId = sessionData.id;
+			console.log("[OPENCODE] Session created:", sessionId);
+
+			// Send the planning prompt
+			console.log("[OPENCODE] Sending planning prompt...");
+			const messageBody = JSON.stringify({
+				parts: [{ type: "text", text: planningPrompt }],
 			});
+
+			// Write message body to file to avoid shell escaping issues
+			await sandbox.files.write("/tmp/message.json", messageBody);
+
+			const sendMessageResult = await sandbox.commands.run(
+				`curl -s -X POST http://localhost:${serverPort}/session/${sessionId}/message -H "Content-Type: application/json" -d @/tmp/message.json`,
+				{ timeoutMs: COMMAND_TIMEOUT_MS },
+			);
+
 			console.log(
 				"[OPENCODE] OpenCode completed in",
 				Date.now() - opencodeStartTime,
 				"ms",
 			);
-			console.log("[OPENCODE] Exit code:", opencodeResult.exitCode);
 
-			if (opencodeResult.exitCode !== 0) {
-				console.log("[OPENCODE] OpenCode stderr:", opencodeResult.stderr);
-				throw new Error(
-					`OpenCode failed: ${opencodeResult.stderr || opencodeResult.stdout}`,
-				);
+			if (sendMessageResult.exitCode !== 0) {
+				console.log("[OPENCODE] API error:", sendMessageResult.stderr);
+				throw new Error(`OpenCode API failed: ${sendMessageResult.stderr}`);
 			}
 
-			const plan = opencodeResult.stdout.trim();
+			// Parse the response
+			const response = JSON.parse(sendMessageResult.stdout);
+
+			// Extract text from response parts
+			let plan = "";
+			if (response.parts && Array.isArray(response.parts)) {
+				for (const part of response.parts) {
+					if (part.type === "text" && part.text) {
+						plan += part.text;
+					}
+				}
+			}
+			plan = plan.trim();
 			console.log("[OPENCODE] === PLAN OUTPUT START ===");
 			console.log(
 				plan.slice(0, 2000) + (plan.length > 2000 ? "\n... (truncated)" : ""),

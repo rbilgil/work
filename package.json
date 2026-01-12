@@ -11,6 +11,7 @@
     "e2b:build:prod": "cd opencode-sandbox && npx tsx build.prod.ts"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.6",
     "@ai-sdk/openai": "^3.0.7",
     "@clerk/nextjs": "^6.36.7",
     "@e2b/code-interpreter": "^2.3.3",

@@ -80,7 +80,7 @@ export default function TaskDetailModal({
 	const [mcpCommand, setMcpCommand] = useState<string | null>(null);
 	const [isGeneratingMcp, setIsGeneratingMcp] = useState(false);
 	const [copied, setCopied] = useState(false);
-	const [planOpen, setPlanOpen] = useState(true);
+	const [planOpen, setPlanOpen] = useState(false);
 	const [subTasksOpen, setSubTasksOpen] = useState(true);
 	const [commentsOpen, setCommentsOpen] = useState(true);
 
@@ -428,10 +428,10 @@ export default function TaskDetailModal({
 										<div className="p-6 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-3">
 											<div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
 												<Loader2 className="w-5 h-5 animate-spin" />
-												<span className="text-sm font-medium">Cursor is analyzing the codebase...</span>
+												<span className="text-sm font-medium">Analyzing codebase...</span>
 											</div>
 											<p className="text-xs text-slate-500 text-center max-w-sm">
-												The AI agent is exploring your repository to create a detailed implementation plan. This typically takes 1-2 minutes.
+												OpenCode is exploring your repository to create a detailed implementation plan. This typically takes 1-2 minutes.
 											</p>
 										</div>
 									) : todo.planStatus === "failed" ? (
@@ -441,7 +441,7 @@ export default function TaskDetailModal({
 											</p>
 										</div>
 									) : (
-										<div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2">
+										<div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 prose prose-xs max-w-none dark:prose-invert prose-p:my-1 prose-p:text-xs prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-li:text-xs prose-headings:mt-2 prose-headings:mb-1 prose-headings:text-sm prose-h1:text-base prose-h2:text-sm prose-h3:text-sm prose-code:text-xs prose-pre:my-1 prose-pre:text-xs">
 											<ReactMarkdown>{plan || todo.plan || ""}</ReactMarkdown>
 										</div>
 									)}

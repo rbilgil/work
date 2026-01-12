@@ -1,20 +1,17 @@
 "use node";
 
-import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { v } from "convex/values";
 import { z } from "zod";
-import { action, internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
-
-const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { action, internalAction } from "./_generated/server";
 
 function selectModel() {
-	const modelName = process.env.AI_MODEL || "gpt-4o-mini";
-	if (!process.env.OPENAI_API_KEY) {
-		throw new Error("OPENAI_API_KEY not configured");
+	const modelName = process.env.AI_MODEL || "google/gemini-3-flash";
+	if (!process.env.GOOGLE_API_KEY) {
+		throw new Error("GOOGLE_API_KEY not configured");
 	}
-	return openai(modelName);
+	return modelName;
 }
 
 // ============ SCHEMAS ============
@@ -43,17 +40,27 @@ const DescriptionSchema = z.object({
 const PlanSchema = z.object({
 	plan: z
 		.string()
-		.describe("A detailed implementation plan in markdown format with clear steps"),
+		.describe(
+			"A detailed implementation plan in markdown format with clear steps",
+		),
 });
 
 const SubTasksSchema = z.object({
-	subtasks: z.array(
-		z.object({
-			title: z.string().describe("Short, actionable sub-task title"),
-			description: z.string().describe("Brief description of what needs to be done"),
-			assignee: z.enum(["agent", "user"]).describe("agent = code/implementation work, user = testing/decisions/verification"),
-		})
-	).describe("List of 3-6 sub-tasks to complete this task"),
+	subtasks: z
+		.array(
+			z.object({
+				title: z.string().describe("Short, actionable sub-task title"),
+				description: z
+					.string()
+					.describe("Brief description of what needs to be done"),
+				assignee: z
+					.enum(["agent", "user"])
+					.describe(
+						"agent = code/implementation work, user = testing/decisions/verification",
+					),
+			}),
+		)
+		.describe("List of 3-6 sub-tasks to complete this task"),
 });
 
 // ============ MAIN PIPELINE ============
@@ -81,21 +88,30 @@ export const generateTicketFromPrompt = internalAction({
 		console.log("[TICKET-GEN] Starting ticket generation pipeline");
 		console.log("[TICKET-GEN] Todo ID:", args.todoId);
 		console.log("[TICKET-GEN] Workspace ID:", args.workspaceId);
-		console.log("[TICKET-GEN] Prompt:", args.prompt.slice(0, 200) + (args.prompt.length > 200 ? "..." : ""));
+		console.log(
+			"[TICKET-GEN] Prompt:",
+			args.prompt.slice(0, 200) + (args.prompt.length > 200 ? "..." : ""),
+		);
 		console.log("=".repeat(60));
 
 		try {
 			const model = selectModel();
-			console.log("[TICKET-GEN] Using model:", process.env.AI_MODEL || "gpt-4o-mini");
+			console.log("[TICKET-GEN] Using model:", model);
 
 			// Fetch workspace context
 			console.log("[TICKET-GEN] Step 0: Fetching workspace context...");
-			const workspace = await ctx.runQuery(internal.workspaces.getWorkspaceInternal, {
-				id: args.workspaceId,
-			});
-			const messages = await ctx.runQuery(internal.workspaces.listMessagesInternal, {
-				workspaceId: args.workspaceId,
-			});
+			const workspace = await ctx.runQuery(
+				internal.workspaces.getWorkspaceInternal,
+				{
+					id: args.workspaceId,
+				},
+			);
+			const messages = await ctx.runQuery(
+				internal.workspaces.listMessagesInternal,
+				{
+					workspaceId: args.workspaceId,
+				},
+			);
 			const docs = await ctx.runQuery(internal.workspaces.listDocsInternal, {
 				workspaceId: args.workspaceId,
 			});
@@ -111,12 +127,26 @@ export const generateTicketFromPrompt = internalAction({
 
 			// Build context strings for AI with numbered indices
 			// We'll use indices instead of IDs to prevent AI from hallucinating IDs
-			const recentMessages = (messages as Array<{ _id: string; content: string; createdAt: number }>).slice(-30);
-			const typedDocs = docs as Array<{ _id: string; title: string; content: string }>;
-			const typedLinks = links as Array<{ _id: string; title: string; url: string }>;
+			const recentMessages = (
+				messages as Array<{ _id: string; content: string; createdAt: number }>
+			).slice(-30);
+			const typedDocs = docs as Array<{
+				_id: string;
+				title: string;
+				content: string;
+			}>;
+			const typedLinks = links as Array<{
+				_id: string;
+				title: string;
+				url: string;
+			}>;
 
 			// Build indexed list of all items for AI to reference
-			type ContextItem = { index: number; refType: "doc" | "message" | "link"; refId: string };
+			type ContextItem = {
+				index: number;
+				refType: "doc" | "message" | "link";
+				refId: string;
+			};
 			const contextItems: ContextItem[] = [];
 			let itemIndex = 1;
 
@@ -124,14 +154,20 @@ export const generateTicketFromPrompt = internalAction({
 			const docLines: string[] = [];
 			for (const doc of typedDocs) {
 				contextItems.push({ index: itemIndex, refType: "doc", refId: doc._id });
-				docLines.push(`${itemIndex}. ${doc.title}: ${doc.content.slice(0, 300)}`);
+				docLines.push(
+					`${itemIndex}. ${doc.title}: ${doc.content.slice(0, 300)}`,
+				);
 				itemIndex++;
 			}
 
 			// Add messages
 			const messageLines: string[] = [];
 			for (const msg of recentMessages) {
-				contextItems.push({ index: itemIndex, refType: "message", refId: msg._id });
+				contextItems.push({
+					index: itemIndex,
+					refType: "message",
+					refId: msg._id,
+				});
 				messageLines.push(`${itemIndex}. ${msg.content.slice(0, 200)}`);
 				itemIndex++;
 			}
@@ -139,7 +175,11 @@ export const generateTicketFromPrompt = internalAction({
 			// Add links
 			const linkLines: string[] = [];
 			for (const link of typedLinks) {
-				contextItems.push({ index: itemIndex, refType: "link", refId: link._id });
+				contextItems.push({
+					index: itemIndex,
+					refType: "link",
+					refId: link._id,
+				});
 				linkLines.push(`${itemIndex}. ${link.title}: ${link.url}`);
 				itemIndex++;
 			}
@@ -157,7 +197,11 @@ The title should be actionable and descriptive, like a good issue/ticket title.`
 				schema: TitleSchema,
 				temperature: 0.3,
 			});
-			console.log("[TICKET-GEN] Title generated in", Date.now() - titleStartTime, "ms");
+			console.log(
+				"[TICKET-GEN] Title generated in",
+				Date.now() - titleStartTime,
+				"ms",
+			);
 			console.log("[TICKET-GEN] Title result:", titleResult.title);
 
 			// 2. Auto-link relevant context
@@ -180,7 +224,10 @@ ${linkLines.length > 0 ? linkLines.join("\n") : "No links available"}
 
 			// Only try to link context if there's content available
 			if (contextItems.length > 0) {
-				console.log("[TICKET-GEN] Available context items:", contextItems.length);
+				console.log(
+					"[TICKET-GEN] Available context items:",
+					contextItems.length,
+				);
 				const linkingStartTime = Date.now();
 				const { object: linkingResult } = await generateObject({
 					model,
@@ -205,7 +252,11 @@ Which numbered items are relevant to this task?`,
 					.filter((item): item is ContextItem => item !== undefined)
 					.map((item) => ({ refType: item.refType, refId: item.refId }));
 
-				console.log("[TICKET-GEN] Context linking done in", Date.now() - linkingStartTime, "ms");
+				console.log(
+					"[TICKET-GEN] Context linking done in",
+					Date.now() - linkingStartTime,
+					"ms",
+				);
 				console.log("[TICKET-GEN] Linked refs:", linkedRefs.length, "items");
 			} else {
 				console.log("[TICKET-GEN] No context available to link");
@@ -241,7 +292,8 @@ Which numbered items are relevant to this task?`,
 
 			const linkedContext = [
 				linkedDocsContent && `**Related Documentation:**\n${linkedDocsContent}`,
-				linkedMessagesContent && `**Related Conversations:**\n${linkedMessagesContent}`,
+				linkedMessagesContent &&
+					`**Related Conversations:**\n${linkedMessagesContent}`,
 				linkedLinksContent && `**Reference Links:**\n${linkedLinksContent}`,
 			]
 				.filter(Boolean)
@@ -256,7 +308,11 @@ Task title: "${titleResult.title}"
 ${linkedContext ? `Relevant context:\n${linkedContext}` : ""}
 
 Write a 2-3 line description for this task.`;
-			console.log("[TICKET-GEN] Description prompt length:", descPrompt.length, "chars");
+			console.log(
+				"[TICKET-GEN] Description prompt length:",
+				descPrompt.length,
+				"chars",
+			);
 			const { object: descResult } = await generateObject({
 				model,
 				system: `You write succinct task descriptions (2-3 lines max).
@@ -266,11 +322,20 @@ Focus on what needs to be done, not extensive background.`,
 				schema: DescriptionSchema,
 				temperature: 0.3,
 			});
-			console.log("[TICKET-GEN] Description generated in", Date.now() - descStartTime, "ms");
-			console.log("[TICKET-GEN] Description result:", descResult.description.slice(0, 150) + "...");
+			console.log(
+				"[TICKET-GEN] Description generated in",
+				Date.now() - descStartTime,
+				"ms",
+			);
+			console.log(
+				"[TICKET-GEN] Description result:",
+				descResult.description.slice(0, 150) + "...",
+			);
 
 			// 4. Update the todo with title and description
-			console.log("\n[TICKET-GEN] Step 4: Saving title and description to database...");
+			console.log(
+				"\n[TICKET-GEN] Step 4: Saving title and description to database...",
+			);
 			await ctx.runAction(internal.ticketAi.updateTodoFromGeneration, {
 				todoId: args.todoId,
 				title: titleResult.title,
@@ -281,7 +346,11 @@ Focus on what needs to be done, not extensive background.`,
 
 			// 5. Set context refs if any were linked
 			if (linkedRefs.length > 0) {
-				console.log("[TICKET-GEN] Step 5: Setting context refs...", linkedRefs.length, "refs");
+				console.log(
+					"[TICKET-GEN] Step 5: Setting context refs...",
+					linkedRefs.length,
+					"refs",
+				);
 				await ctx.runMutation(internal.todoContext.setContextRefsInternal, {
 					todoId: args.todoId,
 					refs: linkedRefs.map((r) => ({
@@ -297,25 +366,42 @@ Focus on what needs to be done, not extensive background.`,
 			const opencodeStartTime = Date.now();
 
 			// Set plan status to generating
-			await ctx.runMutation(internal.agentExecutionMutations.updateTodoForPlanningStart, {
-				todoId: args.todoId,
-				agentRunId: undefined, // No agent run for OpenCode
-			});
+			await ctx.runMutation(
+				internal.agentExecutionMutations.updateTodoForPlanningStart,
+				{
+					todoId: args.todoId,
+					agentRunId: undefined, // No agent run for OpenCode
+				},
+			);
 
-			const planResult = await ctx.runAction(internal.opencodePlanning.generatePlanWithOpenCode, {
-				todoId: args.todoId,
-				workspaceId: args.workspaceId,
+			const planResult = await ctx.runAction(
+				internal.opencodePlanning.generatePlanWithOpenCode,
+				{
+					todoId: args.todoId,
+					workspaceId: args.workspaceId,
+				},
+			);
+			console.log(
+				"[TICKET-GEN] OpenCode call returned in",
+				Date.now() - opencodeStartTime,
+				"ms",
+			);
+			console.log("[TICKET-GEN] OpenCode result:", {
+				success: planResult.success,
+				planLength: planResult.plan?.length,
+				error: planResult.error,
 			});
-			console.log("[TICKET-GEN] OpenCode call returned in", Date.now() - opencodeStartTime, "ms");
-			console.log("[TICKET-GEN] OpenCode result:", { success: planResult.success, planLength: planResult.plan?.length, error: planResult.error });
 
 			if (planResult.success && planResult.plan) {
 				// Save the plan
 				console.log("[TICKET-GEN] Saving plan to database...");
-				await ctx.runMutation(internal.agentExecutionMutations.updateTodoWithPlan, {
-					todoId: args.todoId,
-					plan: planResult.plan,
-				});
+				await ctx.runMutation(
+					internal.agentExecutionMutations.updateTodoWithPlan,
+					{
+						todoId: args.todoId,
+						plan: planResult.plan,
+					},
+				);
 				console.log("[TICKET-GEN] Plan saved");
 
 				// Generate sub-tasks from the plan
@@ -327,8 +413,13 @@ Focus on what needs to be done, not extensive background.`,
 				console.log("[TICKET-GEN] Sub-tasks generated");
 			} else {
 				// OpenCode failed - fall back to LLM plan generation
-				console.warn("[TICKET-GEN] OpenCode failed, falling back to LLM:", planResult.error);
-				console.log("[TICKET-GEN] Starting LLM fallback for plan generation...");
+				console.warn(
+					"[TICKET-GEN] OpenCode failed, falling back to LLM:",
+					planResult.error,
+				);
+				console.log(
+					"[TICKET-GEN] Starting LLM fallback for plan generation...",
+				);
 				await ctx.runAction(internal.ticketAi.generatePlanWithLLM, {
 					todoId: args.todoId,
 					workspaceId: args.workspaceId,
@@ -374,13 +465,12 @@ export const generatePlanWithLLM = internalAction({
 
 		try {
 			const model = selectModel();
-			console.log("[LLM-PLAN] Using model:", process.env.AI_MODEL || "gpt-4o-mini");
 
 			// Get the todo
 			console.log("[LLM-PLAN] Fetching todo details...");
-			const todo = await ctx.runQuery(internal.workspaces.getTodoInternal, {
+			const todo = (await ctx.runQuery(internal.workspaces.getTodoInternal, {
 				id: args.todoId,
-			}) as {
+			})) as {
 				title: string;
 				description?: string;
 				prompt?: string;
@@ -394,16 +484,22 @@ export const generatePlanWithLLM = internalAction({
 
 			// Get workspace info
 			console.log("[LLM-PLAN] Fetching workspace info...");
-			const workspace = await ctx.runQuery(internal.workspaces.getWorkspaceInternal, {
-				id: args.workspaceId,
-			}) as { name: string; description?: string } | null;
+			const workspace = (await ctx.runQuery(
+				internal.workspaces.getWorkspaceInternal,
+				{
+					id: args.workspaceId,
+				},
+			)) as { name: string; description?: string } | null;
 			console.log("[LLM-PLAN] Workspace:", workspace?.name || "Unknown");
 
 			// Fetch full context
 			console.log("[LLM-PLAN] Fetching full context...");
-			const fullContext = await ctx.runQuery(internal.todoContext.getFullContextForAgent, {
-				todoId: args.todoId,
-			}) as {
+			const fullContext = (await ctx.runQuery(
+				internal.todoContext.getFullContextForAgent,
+				{
+					todoId: args.todoId,
+				},
+			)) as {
 				context: { docs: string; messages: string; links: string };
 			} | null;
 			console.log("[LLM-PLAN] Context fetched:", {
@@ -414,9 +510,12 @@ export const generatePlanWithLLM = internalAction({
 
 			const linkedContext: string = fullContext
 				? [
-						fullContext.context.docs && `**Documentation:**\n${fullContext.context.docs}`,
-						fullContext.context.messages && `**Conversations:**\n${fullContext.context.messages}`,
-						fullContext.context.links && `**Links:**\n${fullContext.context.links}`,
+						fullContext.context.docs &&
+							`**Documentation:**\n${fullContext.context.docs}`,
+						fullContext.context.messages &&
+							`**Conversations:**\n${fullContext.context.messages}`,
+						fullContext.context.links &&
+							`**Links:**\n${fullContext.context.links}`,
 					]
 						.filter(Boolean)
 						.join("\n\n")
@@ -463,9 +562,16 @@ Avoid:
 				schema: PlanSchema,
 				temperature: 0.4,
 			});
-			console.log("[LLM-PLAN] Plan generated in", Date.now() - planStartTime, "ms");
+			console.log(
+				"[LLM-PLAN] Plan generated in",
+				Date.now() - planStartTime,
+				"ms",
+			);
 			console.log("[LLM-PLAN] Plan length:", planResult.plan.length, "chars");
-			console.log("[LLM-PLAN] Plan preview:", planResult.plan.slice(0, 200) + "...");
+			console.log(
+				"[LLM-PLAN] Plan preview:",
+				planResult.plan.slice(0, 200) + "...",
+			);
 
 			// Generate sub-tasks
 			const subTaskPrompt = `Task: ${todo.title}
@@ -476,7 +582,11 @@ ${planResult.plan}
 
 Break this into sub-tasks. Assign code work to "agent" and human work (testing, verification, decisions) to "user".`;
 			console.log("[LLM-PLAN] Generating sub-tasks...");
-			console.log("[LLM-PLAN] Sub-task prompt length:", subTaskPrompt.length, "chars");
+			console.log(
+				"[LLM-PLAN] Sub-task prompt length:",
+				subTaskPrompt.length,
+				"chars",
+			);
 			const subTaskStartTime = Date.now();
 			const { object: subTasksResult } = await generateObject({
 				model,
@@ -493,8 +603,16 @@ Rules:
 				schema: SubTasksSchema,
 				temperature: 0.3,
 			});
-			console.log("[LLM-PLAN] Sub-tasks generated in", Date.now() - subTaskStartTime, "ms");
-			console.log("[LLM-PLAN] Generated", subTasksResult.subtasks.length, "sub-tasks:");
+			console.log(
+				"[LLM-PLAN] Sub-tasks generated in",
+				Date.now() - subTaskStartTime,
+				"ms",
+			);
+			console.log(
+				"[LLM-PLAN] Generated",
+				subTasksResult.subtasks.length,
+				"sub-tasks:",
+			);
 			subTasksResult.subtasks.forEach((st, idx) => {
 				console.log(`  [${idx + 1}] ${st.assignee.toUpperCase()}: ${st.title}`);
 			});
@@ -507,10 +625,13 @@ Rules:
 			});
 
 			// Update plan status
-			await ctx.runMutation(internal.agentExecutionMutations.updateTodoWithPlan, {
-				todoId: args.todoId,
-				plan: planResult.plan,
-			});
+			await ctx.runMutation(
+				internal.agentExecutionMutations.updateTodoWithPlan,
+				{
+					todoId: args.todoId,
+					plan: planResult.plan,
+				},
+			);
 			console.log("[LLM-PLAN] Plan saved, planStatus set to 'ready'");
 
 			// Create sub-tasks
@@ -518,7 +639,9 @@ Rules:
 				console.log("[LLM-PLAN] Creating sub-tasks in database...");
 				for (let i = 0; i < subTasksResult.subtasks.length; i++) {
 					const subTask = subTasksResult.subtasks[i];
-					console.log(`[LLM-PLAN] Creating sub-task ${i + 1}/${subTasksResult.subtasks.length}: "${subTask.title}"`);
+					console.log(
+						`[LLM-PLAN] Creating sub-task ${i + 1}/${subTasksResult.subtasks.length}: "${subTask.title}"`,
+					);
 					await ctx.runMutation(internal.workspaces.createSubTaskInternal, {
 						parentId: args.todoId,
 						workspaceId: args.workspaceId,
@@ -536,13 +659,20 @@ Rules:
 
 			const totalTime = Date.now() - startTime;
 			console.log("-".repeat(50));
-			console.log("[LLM-PLAN] LLM plan generation complete in", totalTime, "ms");
+			console.log(
+				"[LLM-PLAN] LLM plan generation complete in",
+				totalTime,
+				"ms",
+			);
 			console.log("-".repeat(50) + "\n");
 		} catch (error) {
 			console.error("[LLM-PLAN] ERROR:", error);
-			await ctx.runMutation(internal.agentExecutionMutations.updateTodoPlanningFailed, {
-				todoId: args.todoId,
-			});
+			await ctx.runMutation(
+				internal.agentExecutionMutations.updateTodoPlanningFailed,
+				{
+					todoId: args.todoId,
+				},
+			);
 		}
 
 		return null;
@@ -585,8 +715,8 @@ type RegenerateTicketResult = {
 };
 
 /**
- * Regenerate ticket content (description, plan, sub-tasks) but keep the title
- * Uses the same Cursor planning pipeline as initial generation
+ * Regenerate ticket content (title, description, plan, sub-tasks)
+ * Uses OpenCode for plan generation with LLM fallback
  */
 export const regenerateTicket = action({
 	args: {
@@ -613,13 +743,12 @@ export const regenerateTicket = action({
 
 		try {
 			const model = selectModel();
-			console.log("[REGEN] Using model:", process.env.AI_MODEL || "gpt-4o-mini");
 
 			// Get the todo
 			console.log("[REGEN] Fetching todo...");
-			const todo = await ctx.runQuery(internal.workspaces.getTodoInternal, {
+			const todo = (await ctx.runQuery(internal.workspaces.getTodoInternal, {
 				id: args.todoId,
-			}) as {
+			})) as {
 				title: string;
 				description?: string;
 				prompt?: string;
@@ -635,16 +764,22 @@ export const regenerateTicket = action({
 
 			// Get workspace info
 			console.log("[REGEN] Fetching workspace...");
-			const workspace = await ctx.runQuery(internal.workspaces.getWorkspaceInternal, {
-				id: todo.workspaceId as any,
-			}) as { name: string; description?: string } | null;
+			const workspace = (await ctx.runQuery(
+				internal.workspaces.getWorkspaceInternal,
+				{
+					id: todo.workspaceId as any,
+				},
+			)) as { name: string; description?: string } | null;
 			console.log("[REGEN] Workspace:", workspace?.name || "Unknown");
 
 			// Fetch full context content
 			console.log("[REGEN] Fetching context...");
-			const fullContext = await ctx.runQuery(internal.todoContext.getFullContextForAgent, {
-				todoId: args.todoId,
-			}) as {
+			const fullContext = (await ctx.runQuery(
+				internal.todoContext.getFullContextForAgent,
+				{
+					todoId: args.todoId,
+				},
+			)) as {
 				context: { docs: string; messages: string; links: string };
 			} | null;
 			console.log("[REGEN] Context fetched:", {
@@ -655,23 +790,49 @@ export const regenerateTicket = action({
 
 			const linkedContext: string = fullContext
 				? [
-						fullContext.context.docs && `**Documentation:**\n${fullContext.context.docs}`,
-						fullContext.context.messages && `**Conversations:**\n${fullContext.context.messages}`,
-						fullContext.context.links && `**Links:**\n${fullContext.context.links}`,
+						fullContext.context.docs &&
+							`**Documentation:**\n${fullContext.context.docs}`,
+						fullContext.context.messages &&
+							`**Conversations:**\n${fullContext.context.messages}`,
+						fullContext.context.links &&
+							`**Links:**\n${fullContext.context.links}`,
 					]
 						.filter(Boolean)
 						.join("\n\n")
 				: "";
 
-			// 1. Regenerate description (fast LLM call)
-			console.log("\n[REGEN] Step 1: Regenerating description...");
-			const descPrompt = `Task title: "${todo.title}"
+			// 1. Regenerate title
+			console.log("\n[REGEN] Step 1: Regenerating title...");
+			const titlePrompt = `Generate a concise title for this task prompt:\n\n"${todo.prompt || todo.title}"`;
+			const titleStartTime = Date.now();
+			const { object: titleResult } = await generateObject({
+				model,
+				system: `You generate concise task titles (5-10 words) from user prompts.
+The title should be actionable and descriptive, like a good issue/ticket title.`,
+				prompt: titlePrompt,
+				schema: TitleSchema,
+				temperature: 0.3,
+			});
+			console.log(
+				"[REGEN] Title generated in",
+				Date.now() - titleStartTime,
+				"ms",
+			);
+			console.log("[REGEN] New title:", titleResult.title);
+
+			// 2. Regenerate description (fast LLM call)
+			console.log("\n[REGEN] Step 2: Regenerating description...");
+			const descPrompt = `Task title: "${titleResult.title}"
 ${todo.prompt ? `Original prompt: "${todo.prompt}"` : ""}
 
 ${linkedContext ? `Relevant context:\n${linkedContext}` : ""}
 
 Write a 2-3 line description for this task.`;
-			console.log("[REGEN] Description prompt length:", descPrompt.length, "chars");
+			console.log(
+				"[REGEN] Description prompt length:",
+				descPrompt.length,
+				"chars",
+			);
 			const descStartTime = Date.now();
 			const { object: descResult } = await generateObject({
 				model,
@@ -682,48 +843,73 @@ Focus on what needs to be done, not extensive background.`,
 				schema: DescriptionSchema,
 				temperature: 0.3,
 			});
-			console.log("[REGEN] Description generated in", Date.now() - descStartTime, "ms");
-			console.log("[REGEN] Description:", descResult.description.slice(0, 100) + "...");
+			console.log(
+				"[REGEN] Description generated in",
+				Date.now() - descStartTime,
+				"ms",
+			);
+			console.log(
+				"[REGEN] Description:",
+				descResult.description.slice(0, 100) + "...",
+			);
 
-			// 2. Update description immediately
-			console.log("\n[REGEN] Step 2: Saving description...");
-			await ctx.runMutation(internal.workspaces.updateTodoContentInternal, {
-				todoId: args.todoId,
+			// 3. Update title and description immediately
+			console.log("\n[REGEN] Step 3: Saving title and description...");
+			await ctx.runMutation(api.workspaces.updateWorkspaceTodo, {
+				id: args.todoId,
+				title: titleResult.title,
 				description: descResult.description,
 			});
-			console.log("[REGEN] Description saved");
+			console.log("[REGEN] Title and description saved");
 
-			// 3. Delete existing sub-tasks before regenerating
-			console.log("\n[REGEN] Step 3: Deleting existing sub-tasks...");
+			// 4. Delete existing sub-tasks before regenerating
+			console.log("\n[REGEN] Step 4: Deleting existing sub-tasks...");
 			await ctx.runMutation(internal.workspaces.deleteSubTasksInternal, {
 				parentId: args.todoId,
 			});
 			console.log("[REGEN] Existing sub-tasks deleted");
 
-			// 4. Generate plan with OpenCode
-			console.log("\n[REGEN] Step 4: Generating plan with OpenCode...");
+			// 5. Generate plan with OpenCode
+			console.log("\n[REGEN] Step 5: Generating plan with OpenCode...");
 
 			// Set plan status to generating
-			await ctx.runMutation(internal.agentExecutionMutations.updateTodoForPlanningStart, {
-				todoId: args.todoId,
-				agentRunId: undefined,
-			});
+			await ctx.runMutation(
+				internal.agentExecutionMutations.updateTodoForPlanningStart,
+				{
+					todoId: args.todoId,
+					agentRunId: undefined,
+				},
+			);
 
 			const opencodeStartTime = Date.now();
-			const planResult = await ctx.runAction(internal.opencodePlanning.generatePlanWithOpenCode, {
-				todoId: args.todoId,
-				workspaceId: todo.workspaceId as any,
+			const planResult = await ctx.runAction(
+				internal.opencodePlanning.generatePlanWithOpenCode,
+				{
+					todoId: args.todoId,
+					workspaceId: todo.workspaceId as any,
+				},
+			);
+			console.log(
+				"[REGEN] OpenCode call returned in",
+				Date.now() - opencodeStartTime,
+				"ms",
+			);
+			console.log("[REGEN] OpenCode result:", {
+				success: planResult.success,
+				planLength: planResult.plan?.length,
+				error: planResult.error,
 			});
-			console.log("[REGEN] OpenCode call returned in", Date.now() - opencodeStartTime, "ms");
-			console.log("[REGEN] OpenCode result:", { success: planResult.success, planLength: planResult.plan?.length, error: planResult.error });
 
 			if (planResult.success && planResult.plan) {
 				// Save the plan
 				console.log("[REGEN] Saving plan to database...");
-				await ctx.runMutation(internal.agentExecutionMutations.updateTodoWithPlan, {
-					todoId: args.todoId,
-					plan: planResult.plan,
-				});
+				await ctx.runMutation(
+					internal.agentExecutionMutations.updateTodoWithPlan,
+					{
+						todoId: args.todoId,
+						plan: planResult.plan,
+					},
+				);
 				console.log("[REGEN] Plan saved");
 
 				// Generate sub-tasks from the plan
@@ -735,7 +921,10 @@ Focus on what needs to be done, not extensive background.`,
 				console.log("[REGEN] Sub-tasks generated");
 			} else {
 				// OpenCode failed - fall back to LLM plan generation
-				console.warn("[REGEN] OpenCode failed, falling back to LLM:", planResult.error);
+				console.warn(
+					"[REGEN] OpenCode failed, falling back to LLM:",
+					planResult.error,
+				);
 				await ctx.runAction(internal.ticketAi.generatePlanWithLLM, {
 					todoId: args.todoId,
 					workspaceId: todo.workspaceId as any,
@@ -777,13 +966,12 @@ export const generateSubTasksFromPlan = internalAction({
 
 		try {
 			const model = selectModel();
-			console.log("[SUB-TASKS] Using model:", process.env.AI_MODEL || "gpt-4o-mini");
 
 			// Get the todo
 			console.log("[SUB-TASKS] Fetching todo details...");
-			const todo = await ctx.runQuery(internal.workspaces.getTodoInternal, {
+			const todo = (await ctx.runQuery(internal.workspaces.getTodoInternal, {
 				id: args.todoId,
-			}) as {
+			})) as {
 				title: string;
 				description?: string;
 				workspaceId: string;
@@ -806,7 +994,10 @@ Break this into sub-tasks. Assign code work to "agent" and human work (testing, 
 			console.log("[SUB-TASKS] Calling LLM to generate sub-tasks...");
 			console.log("[SUB-TASKS] Prompt length:", subTaskPrompt.length, "chars");
 			console.log("[SUB-TASKS] === PROMPT START ===");
-			console.log(subTaskPrompt.slice(0, 500) + (subTaskPrompt.length > 500 ? "\n... (truncated)" : ""));
+			console.log(
+				subTaskPrompt.slice(0, 500) +
+					(subTaskPrompt.length > 500 ? "\n... (truncated)" : ""),
+			);
 			console.log("[SUB-TASKS] === PROMPT END ===");
 
 			const llmStartTime = Date.now();
@@ -825,8 +1016,16 @@ Rules:
 				schema: SubTasksSchema,
 				temperature: 0.3,
 			});
-			console.log("[SUB-TASKS] LLM responded in", Date.now() - llmStartTime, "ms");
-			console.log("[SUB-TASKS] Generated", subTasksResult.subtasks.length, "sub-tasks:");
+			console.log(
+				"[SUB-TASKS] LLM responded in",
+				Date.now() - llmStartTime,
+				"ms",
+			);
+			console.log(
+				"[SUB-TASKS] Generated",
+				subTasksResult.subtasks.length,
+				"sub-tasks:",
+			);
 			subTasksResult.subtasks.forEach((st, idx) => {
 				console.log(`  [${idx + 1}] ${st.assignee.toUpperCase()}: ${st.title}`);
 			});
@@ -836,7 +1035,9 @@ Rules:
 				console.log("[SUB-TASKS] Creating sub-tasks in database...");
 				for (let i = 0; i < subTasksResult.subtasks.length; i++) {
 					const subTask = subTasksResult.subtasks[i];
-					console.log(`[SUB-TASKS] Creating sub-task ${i + 1}/${subTasksResult.subtasks.length}: "${subTask.title}"`);
+					console.log(
+						`[SUB-TASKS] Creating sub-task ${i + 1}/${subTasksResult.subtasks.length}: "${subTask.title}"`,
+					);
 					await ctx.runMutation(internal.workspaces.createSubTaskInternal, {
 						parentId: args.todoId,
 						workspaceId: todo.workspaceId as any,

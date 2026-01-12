@@ -1,20 +1,17 @@
 "use node";
 
-import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { v } from "convex/values";
 import { z } from "zod";
-import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
-
-const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { action } from "./_generated/server";
 
 function selectModel() {
-	const modelName = process.env.AI_MODEL || "gpt-4o-mini";
-	if (!process.env.OPENAI_API_KEY) {
-		throw new Error("OPENAI_API_KEY not configured");
+	const modelName = process.env.AI_MODEL || "google/gemini-3-flash";
+	if (!process.env.GOOGLE_API_KEY) {
+		throw new Error("GOOGLE_API_KEY not configured");
 	}
-	return openai(modelName);
+	return modelName;
 }
 
 // Schema for context suggestions
@@ -53,7 +50,10 @@ export const suggestContextForTodo = action({
 			}),
 		),
 	}),
-	handler: async (ctx, args): Promise<{
+	handler: async (
+		ctx,
+		args,
+	): Promise<{
 		suggestions: Array<{
 			refType: "doc" | "message" | "link";
 			refId: string;

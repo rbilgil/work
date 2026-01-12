@@ -1,28 +1,23 @@
 "use node";
 
-import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { v } from "convex/values";
 import { z } from "zod";
-import { internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
-
-const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { internalAction } from "./_generated/server";
 
 function selectModel() {
-	const modelName = process.env.AI_MODEL || "gpt-4o-mini";
-	if (!process.env.OPENAI_API_KEY) {
-		throw new Error("OPENAI_API_KEY not configured");
+	const modelName = process.env.AI_MODEL || "google/gemini-3-flash";
+	if (!process.env.GOOGLE_API_KEY) {
+		throw new Error("GOOGLE_API_KEY not configured");
 	}
-	return openai(modelName);
+	return modelName;
 }
 
 // ============ SCHEMAS ============
 
 const AgentResponseSchema = z.object({
-	response: z
-		.string()
-		.describe("The agent's response to the user's request"),
+	response: z.string().describe("The agent's response to the user's request"),
 	shouldUpdatePlan: z
 		.boolean()
 		.describe("Whether the plan needs to be updated based on this request"),
@@ -78,29 +73,44 @@ export const processAgentMention = internalAction({
 				}));
 
 			// Get workspace context
-			const workspace = await ctx.runQuery(internal.workspaces.getWorkspaceInternal, {
-				id: todo.workspaceId,
-			});
+			const workspace = await ctx.runQuery(
+				internal.workspaces.getWorkspaceInternal,
+				{
+					id: todo.workspaceId,
+				},
+			);
 
 			// Get linked context
-			const fullContext = await ctx.runQuery(internal.todoContext.getFullContextForAgent, {
-				todoId: args.todoId,
-			});
+			const fullContext = await ctx.runQuery(
+				internal.todoContext.getFullContextForAgent,
+				{
+					todoId: args.todoId,
+				},
+			);
 
 			const linkedContext = fullContext
 				? [
-						fullContext.context.docs && `**Documentation:**\n${fullContext.context.docs}`,
-						fullContext.context.messages && `**Conversations:**\n${fullContext.context.messages}`,
-						fullContext.context.links && `**Links:**\n${fullContext.context.links}`,
+						fullContext.context.docs &&
+							`**Documentation:**\n${fullContext.context.docs}`,
+						fullContext.context.messages &&
+							`**Conversations:**\n${fullContext.context.messages}`,
+						fullContext.context.links &&
+							`**Links:**\n${fullContext.context.links}`,
 					]
 						.filter(Boolean)
 						.join("\n\n")
 				: "";
 
 			// Build conversation history string
-			const conversationHistory = previousComments.length > 0
-				? previousComments.map((c: { author: string; content: string }) => `**${c.author}:** ${c.content}`).join("\n\n")
-				: "No previous comments.";
+			const conversationHistory =
+				previousComments.length > 0
+					? previousComments
+							.map(
+								(c: { author: string; content: string }) =>
+									`**${c.author}:** ${c.content}`,
+							)
+							.join("\n\n")
+					: "No previous comments.";
 
 			// Generate agent response
 			const { object: result } = await generateObject({
@@ -158,7 +168,8 @@ Respond to the user's request. If they're asking you to change the plan, provide
 			// Add error comment so user knows something went wrong
 			await ctx.runMutation(api.todoComments.addAgentComment, {
 				todoId: args.todoId,
-				content: "I encountered an error while processing your request. Please try again or rephrase your question.",
+				content:
+					"I encountered an error while processing your request. Please try again or rephrase your question.",
 			});
 		}
 
