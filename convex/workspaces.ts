@@ -711,6 +711,63 @@ export const createWorkspaceTodo = mutation({
 	},
 });
 
+/**
+ * Create a todo from a prompt - AI generates title, description, context links, and plan
+ */
+export const createWorkspaceTodoFromPrompt = mutation({
+	args: {
+		workspaceId: v.id("workspaces"),
+		prompt: v.string(),
+		status: v.optional(workspaceTodoStatus),
+	},
+	returns: v.union(v.id("workspace_todos"), v.null()),
+	handler: async (ctx, args) => {
+		const user = await getAuthUser(ctx);
+		if (!user) {
+			return null;
+		}
+
+		// Verify workspace access
+		if (!(await verifyWorkspaceAccess(ctx, args.workspaceId, user._id))) {
+			throw new Error("Workspace not found or access denied");
+		}
+
+		const targetStatus = args.status ?? "todo";
+
+		// Get max order for the status column
+		const existingTodos = await ctx.db
+			.query("workspace_todos")
+			.withIndex("by_workspace_and_status", (q) =>
+				q.eq("workspaceId", args.workspaceId).eq("status", targetStatus),
+			)
+			.collect();
+		const maxOrder = existingTodos.reduce(
+			(max, t) => Math.max(max, t.order ?? 0),
+			0,
+		);
+
+		// Create todo with placeholder title and the prompt
+		const todoId = await ctx.db.insert("workspace_todos", {
+			workspaceId: args.workspaceId,
+			title: "Generating...",
+			prompt: args.prompt,
+			status: targetStatus,
+			order: maxOrder + 1,
+			userId: user._id,
+			createdAt: Date.now(),
+		});
+
+		// Schedule AI to generate title, description, context links, and plan
+		await ctx.scheduler.runAfter(0, internal.ticketAi.generateTicketFromPrompt, {
+			todoId,
+			workspaceId: args.workspaceId,
+			prompt: args.prompt,
+		});
+
+		return todoId;
+	},
+});
+
 export const listWorkspaceTodos = query({
 	args: { workspaceId: v.id("workspaces") },
 	returns: v.array(
@@ -729,6 +786,8 @@ export const listWorkspaceTodos = query({
 			userId: v.id("users"),
 			createdAt: v.number(),
 			completedAt: v.optional(v.number()),
+			prompt: v.optional(v.string()),
+			plan: v.optional(v.string()),
 		}),
 	),
 	handler: async (ctx, args) => {
@@ -1077,6 +1136,8 @@ export const getTodoInternal = internalQuery({
 			_id: v.id("workspace_todos"),
 			title: v.string(),
 			description: v.optional(v.string()),
+			prompt: v.optional(v.string()),
+			plan: v.optional(v.string()),
 			status: v.string(),
 			workspaceId: v.id("workspaces"),
 		}),
@@ -1089,6 +1150,8 @@ export const getTodoInternal = internalQuery({
 			_id: todo._id,
 			title: todo.title,
 			description: todo.description,
+			prompt: todo.prompt,
+			plan: todo.plan,
 			status: todo.status,
 			workspaceId: todo.workspaceId,
 		};
@@ -1103,6 +1166,21 @@ export const updateTodoAgentPromptInternal = internalMutation({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		await ctx.db.patch(args.todoId, { agentPrompt: args.agentPrompt });
+		return null;
+	},
+});
+
+export const updateTodoPlanInternal = internalMutation({
+	args: {
+		todoId: v.id("workspace_todos"),
+		plan: v.string(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		await ctx.db.patch(args.todoId, {
+			plan: args.plan,
+			planGeneratedAt: Date.now(),
+		});
 		return null;
 	},
 });

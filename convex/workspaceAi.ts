@@ -102,7 +102,7 @@ export const generateTaskDescriptionInternal = internalAction({
 		// Build context from messages (limit to most recent 50 for token efficiency)
 		const recentMessages = messages.slice(-50);
 		const chatContext = recentMessages
-			.map((m) => `[${new Date(m.createdAt).toLocaleString()}]: ${m.content}`)
+			.map((m: { createdAt: number; content: string }) => `[${new Date(m.createdAt).toLocaleString()}]: ${m.content}`)
 			.join("\n");
 
 		const { object }: { object: TaskDescriptionResult } = await generateObject({

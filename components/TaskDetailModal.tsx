@@ -1,9 +1,15 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
-import { Bot, RefreshCw, Sparkles, User, Loader2, Terminal, Copy, Check } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, MessageSquare, RefreshCw, Sparkles, User, Loader2, Terminal, Copy, Check } from "lucide-react";
 import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
 	Dialog,
 	DialogContent,
@@ -25,6 +31,7 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import AgentStatusCard from "./AgentStatusCard";
 import ContextRefSelector from "./ContextRefSelector";
+import TodoComments from "./TodoComments";
 
 type Status = "backlog" | "todo" | "in_progress" | "in_review" | "done";
 
@@ -47,6 +54,8 @@ interface TaskDetailModalProps {
 		agentType?: "cursor" | "local";
 		agentPrompt?: string;
 		currentAgentRunId?: Id<"agent_runs">;
+		prompt?: string;
+		plan?: string;
 	};
 }
 
@@ -57,9 +66,11 @@ export default function TaskDetailModal({
 	todo,
 }: TaskDetailModalProps) {
 	const [isRegenerating, setIsRegenerating] = useState(false);
+	const [isRegeneratingPlan, setIsRegeneratingPlan] = useState(false);
 	const [isStartingAgent, setIsStartingAgent] = useState(false);
 	const [title, setTitle] = useState(todo.title);
 	const [description, setDescription] = useState(todo.description ?? "");
+	const [plan, setPlan] = useState(todo.plan ?? "");
 	const [status, setStatus] = useState<Status>(todo.status);
 	const [contextRefs, setContextRefs] = useState<ContextRef[]>([]);
 	const [agentError, setAgentError] = useState<string | null>(null);
@@ -67,10 +78,13 @@ export default function TaskDetailModal({
 	const [mcpCommand, setMcpCommand] = useState<string | null>(null);
 	const [isGeneratingMcp, setIsGeneratingMcp] = useState(false);
 	const [copied, setCopied] = useState(false);
+	const [planOpen, setPlanOpen] = useState(true);
+	const [commentsOpen, setCommentsOpen] = useState(true);
 
 	const generateDescription = useAction(
 		api.workspaceAi.generateTaskDescription,
 	);
+	const regeneratePlanAction = useAction(api.ticketAi.regeneratePlan);
 	const updateTodo = useMutation(api.workspaces.updateWorkspaceTodo);
 	const queueForAgent = useMutation(api.workspaces.queueTodoForAgent);
 	const startCursorAgent = useAction(api.agentExecution.startCursorAgent);
@@ -93,6 +107,7 @@ export default function TaskDetailModal({
 	useEffect(() => {
 		setTitle(todo.title);
 		setDescription(todo.description ?? "");
+		setPlan(todo.plan ?? "");
 		setStatus(todo.status);
 		setAgentError(null);
 	}, [todo]);
@@ -133,6 +148,24 @@ export default function TaskDetailModal({
 			console.error("Failed to regenerate description:", error);
 		} finally {
 			setIsRegenerating(false);
+		}
+	};
+
+	const handleRegeneratePlan = async () => {
+		setIsRegeneratingPlan(true);
+		try {
+			const result = await regeneratePlanAction({
+				todoId: todo._id,
+			});
+			if (result.success && result.plan) {
+				setPlan(result.plan);
+			} else if (result.error) {
+				console.error("Failed to regenerate plan:", result.error);
+			}
+		} catch (error) {
+			console.error("Failed to regenerate plan:", error);
+		} finally {
+			setIsRegeneratingPlan(false);
 		}
 	};
 
@@ -357,6 +390,85 @@ export default function TaskDetailModal({
 							compact={false}
 						/>
 					</div>
+
+					{/* Original Prompt */}
+					{todo.prompt && (
+						<>
+							<Separator />
+							<div>
+								<label className="text-sm font-medium block mb-2">
+									Original Prompt
+								</label>
+								<div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+									<p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+										{todo.prompt}
+									</p>
+								</div>
+							</div>
+						</>
+					)}
+
+					{/* Implementation Plan */}
+					{(plan || todo.plan) && (
+						<>
+							<Separator />
+							<Collapsible open={planOpen} onOpenChange={setPlanOpen}>
+								<div className="flex items-center justify-between">
+									<CollapsibleTrigger asChild>
+										<button
+											type="button"
+											className="flex items-center gap-2 text-sm font-medium hover:text-blue-600 transition-colors"
+										>
+											{planOpen ? (
+												<ChevronDown className="w-4 h-4" />
+											) : (
+												<ChevronRight className="w-4 h-4" />
+											)}
+											Implementation Plan
+										</button>
+									</CollapsibleTrigger>
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={handleRegeneratePlan}
+										disabled={isRegeneratingPlan}
+									>
+										<RefreshCw
+											className={`w-4 h-4 mr-2 ${isRegeneratingPlan ? "animate-spin" : ""}`}
+										/>
+										{isRegeneratingPlan ? "Regenerating..." : "Regenerate"}
+									</Button>
+								</div>
+								<CollapsibleContent className="mt-3">
+									<div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2">
+										<ReactMarkdown>{plan || todo.plan || ""}</ReactMarkdown>
+									</div>
+								</CollapsibleContent>
+							</Collapsible>
+						</>
+					)}
+
+					{/* Comments Section */}
+					<Separator />
+					<Collapsible open={commentsOpen} onOpenChange={setCommentsOpen}>
+						<CollapsibleTrigger asChild>
+							<button
+								type="button"
+								className="flex items-center gap-2 text-sm font-medium hover:text-blue-600 transition-colors"
+							>
+								{commentsOpen ? (
+									<ChevronDown className="w-4 h-4" />
+								) : (
+									<ChevronRight className="w-4 h-4" />
+								)}
+								<MessageSquare className="w-4 h-4" />
+								Comments
+							</button>
+						</CollapsibleTrigger>
+						<CollapsibleContent className="mt-3">
+							<TodoComments todoId={todo._id} />
+						</CollapsibleContent>
+					</Collapsible>
 
 					<Separator />
 

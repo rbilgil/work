@@ -111,6 +111,9 @@ export default defineSchema({
 		workspaceId: v.id("workspaces"),
 		title: v.string(),
 		description: v.optional(v.string()),
+		prompt: v.optional(v.string()), // User's original prompt/instructions for AI
+		plan: v.optional(v.string()), // AI-generated implementation plan (markdown)
+		planGeneratedAt: v.optional(v.number()), // Timestamp of last plan generation
 		status: v.union(
 			v.literal("backlog"),
 			v.literal("todo"),
@@ -140,6 +143,18 @@ export default defineSchema({
 	})
 		.index("by_todo", ["todoId"])
 		.index("by_ref", ["refType", "refId"]),
+
+	// Todo Comments - Comments on todos with @Agent support
+	todo_comments: defineTable({
+		todoId: v.id("workspace_todos"),
+		content: v.string(), // Markdown content
+		authorType: v.union(v.literal("user"), v.literal("agent")),
+		userId: v.optional(v.id("users")), // Set when authorType === "user"
+		mentionsAgent: v.boolean(), // True if @Agent is in content
+		createdAt: v.number(),
+	})
+		.index("by_todo", ["todoId"])
+		.index("by_todo_and_created", ["todoId", "createdAt"]),
 
 	// Agent Runs - Track execution of AI coding agents
 	agent_runs: defineTable({
