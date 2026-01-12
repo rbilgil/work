@@ -119,7 +119,7 @@ export default defineSchema({
 			v.literal("done"),
 		),
 		assignee: v.optional(v.union(v.literal("user"), v.literal("agent"))),
-		agentType: v.optional(v.literal("cursor")), // Which agent type (extensible for future)
+		agentType: v.optional(v.union(v.literal("cursor"), v.literal("local"))), // Which agent type
 		agentPrompt: v.optional(v.string()),
 		currentAgentRunId: v.optional(v.id("agent_runs")), // Current/latest agent run
 		order: v.optional(v.number()), // For kanban drag-drop ordering
@@ -167,6 +167,21 @@ export default defineSchema({
 		.index("by_todo", ["todoId"])
 		.index("by_external_agent_id", ["externalAgentId"])
 		.index("by_pr", ["prNumber"]),
+
+	// MCP Access Tokens - For local agent access to task context
+	mcp_access_tokens: defineTable({
+		todoId: v.id("workspace_todos"),
+		workspaceId: v.id("workspaces"),
+		organizationId: v.id("organizations"),
+		token: v.string(), // Random token for authentication
+		createdByUserId: v.id("users"),
+		createdAt: v.string(), // ISO 8601 datetime
+		expiresAt: v.string(), // ISO 8601 datetime (1 hour validity)
+		lastUsedAt: v.optional(v.string()), // ISO 8601 datetime
+		revokedAt: v.optional(v.string()), // ISO 8601 datetime
+	})
+		.index("by_token", ["token"])
+		.index("by_todo", ["todoId"]),
 
 	// Workspace Links - External links (emails, spreadsheets, figma, etc.)
 	workspace_links: defineTable({

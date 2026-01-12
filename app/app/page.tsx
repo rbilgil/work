@@ -25,7 +25,7 @@ type Todo = {
 	status: Status;
 	order?: number;
 	assignee?: "user" | "agent";
-	agentType?: "cursor";
+	agentType?: "cursor" | "local";
 	agentPrompt?: string;
 	currentAgentRunId?: Id<"agent_runs">;
 };

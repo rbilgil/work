@@ -23,7 +23,7 @@ type Todo = {
 	status: Status;
 	order?: number;
 	assignee?: "user" | "agent";
-	agentType?: "cursor";
+	agentType?: "cursor" | "local";
 	agentPrompt?: string;
 	currentAgentRunId?: Id<"agent_runs">;
 };
@@ -138,6 +138,16 @@ export default function KanbanBoard({
 
 	const getAgentStatusLabel = (todo: Todo) => {
 		if (todo.assignee !== "agent") return null;
+
+		// Local agent
+		if (todo.agentType === "local") {
+			return (
+				<span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+					<Bot className="w-3 h-3" />
+					Local Agent
+				</span>
+			);
+		}
 
 		if (todo.status === "in_progress" && todo.currentAgentRunId) {
 			return (
@@ -309,8 +319,10 @@ function TodoCard({
 			className={cn(
 				"p-3 bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-200/70 dark:border-white/10 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow",
 				isDragging && "opacity-50",
-				todo.assignee === "agent" && "border-l-2 border-l-purple-500",
+				todo.assignee === "agent" && todo.agentType === "local" && "border-l-2 border-l-green-500",
+				todo.assignee === "agent" && todo.agentType !== "local" && "border-l-2 border-l-purple-500",
 				todo.agentType === "cursor" && "ring-1 ring-purple-200 dark:ring-purple-800",
+				todo.agentType === "local" && "ring-1 ring-green-200 dark:ring-green-800",
 			)}
 		>
 			<div className="flex items-start gap-2">

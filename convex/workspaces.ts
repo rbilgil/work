@@ -722,7 +722,7 @@ export const listWorkspaceTodos = query({
 			description: v.optional(v.string()),
 			status: workspaceTodoStatus,
 			assignee: v.optional(v.union(v.literal("user"), v.literal("agent"))),
-			agentType: v.optional(v.literal("cursor")),
+			agentType: v.optional(v.union(v.literal("cursor"), v.literal("local"))),
 			agentPrompt: v.optional(v.string()),
 			currentAgentRunId: v.optional(v.id("agent_runs")),
 			order: v.optional(v.number()),

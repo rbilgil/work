@@ -1,12 +1,13 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
-import { Bot, RefreshCw, Sparkles, User, Loader2 } from "lucide-react";
+import { Bot, RefreshCw, Sparkles, User, Loader2, Terminal, Copy, Check } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
+	DialogDescription,
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
@@ -43,7 +44,7 @@ interface TaskDetailModalProps {
 		description?: string;
 		status: Status;
 		assignee?: "user" | "agent";
-		agentType?: "cursor";
+		agentType?: "cursor" | "local";
 		agentPrompt?: string;
 		currentAgentRunId?: Id<"agent_runs">;
 	};
@@ -62,6 +63,10 @@ export default function TaskDetailModal({
 	const [status, setStatus] = useState<Status>(todo.status);
 	const [contextRefs, setContextRefs] = useState<ContextRef[]>([]);
 	const [agentError, setAgentError] = useState<string | null>(null);
+	const [localAgentModalOpen, setLocalAgentModalOpen] = useState(false);
+	const [mcpCommand, setMcpCommand] = useState<string | null>(null);
+	const [isGeneratingMcp, setIsGeneratingMcp] = useState(false);
+	const [copied, setCopied] = useState(false);
 
 	const generateDescription = useAction(
 		api.workspaceAi.generateTaskDescription,
@@ -70,6 +75,7 @@ export default function TaskDetailModal({
 	const queueForAgent = useMutation(api.workspaces.queueTodoForAgent);
 	const startCursorAgent = useAction(api.agentExecution.startCursorAgent);
 	const setContextRefsMutation = useMutation(api.todoContext.setContextRefs);
+	const generateMcpToken = useMutation(api.mcp.generateMcpToken);
 
 	// Query for existing context refs
 	const existingRefs = useQuery(api.todoContext.getContextRefs, {
@@ -195,6 +201,47 @@ export default function TaskDetailModal({
 		await queueForAgent({ id: todo._id });
 	};
 
+	const handleStartLocalAgent = async () => {
+		setIsGeneratingMcp(true);
+		setAgentError(null);
+		try {
+			// First save context refs and description
+			await setContextRefsMutation({
+				todoId: todo._id,
+				refs: contextRefs.map((ref) => ({
+					refType: ref.refType,
+					refId: ref.refId,
+				})),
+			});
+
+			await updateTodo({
+				id: todo._id,
+				title,
+				description,
+			});
+
+			// Generate MCP token
+			const result = await generateMcpToken({ todoId: todo._id });
+			setMcpCommand(result.mcpCommand);
+			setLocalAgentModalOpen(true);
+		} catch (error) {
+			console.error("Failed to generate MCP token:", error);
+			setAgentError(
+				error instanceof Error ? error.message : "Failed to set up local agent",
+			);
+		} finally {
+			setIsGeneratingMcp(false);
+		}
+	};
+
+	const handleCopyCommand = async () => {
+		if (mcpCommand) {
+			await navigator.clipboard.writeText(mcpCommand);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		}
+	};
+
 	const isAgentRunning =
 		todo.assignee === "agent" &&
 		todo.status === "in_progress" &&
@@ -203,6 +250,7 @@ export default function TaskDetailModal({
 	const isEditable = !isAgentRunning;
 
 	return (
+	<>
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
 				<DialogHeader>
@@ -329,7 +377,12 @@ export default function TaskDetailModal({
 						<div className="flex items-center justify-between">
 							<div className="flex items-center gap-2 text-sm">
 								<span className="text-slate-500">Assigned to:</span>
-								{todo.assignee === "agent" ? (
+								{todo.assignee === "agent" && todo.agentType === "local" ? (
+									<span className="flex items-center gap-1.5 text-green-600 dark:text-green-400 font-medium">
+										<Terminal className="w-4 h-4" />
+										Local Agent (Claude Code)
+									</span>
+								) : todo.assignee === "agent" ? (
 									<span className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-medium">
 										<Bot className="w-4 h-4" />
 										Cursor Agent
@@ -380,17 +433,26 @@ export default function TaskDetailModal({
 
 				{/* Actions */}
 				<div className="flex justify-between pt-4 border-t border-slate-200 dark:border-white/10 mt-4">
-					<div className="flex gap-2">
+					<div className="flex gap-2 flex-wrap">
 						{!isAgentRunning && (
 							<>
 								<Button
 									variant="outline"
-									onClick={handleQueueForAgent}
-									disabled={todo.assignee === "agent"}
+									onClick={handleStartLocalAgent}
+									disabled={isGeneratingMcp || todo.agentType === "local"}
 									className="gap-2"
 								>
-									<Bot className="w-4 h-4" />
-									Queue for Agent
+									{isGeneratingMcp ? (
+										<>
+											<Loader2 className="w-4 h-4 animate-spin" />
+											Setting up...
+										</>
+									) : (
+										<>
+											<Terminal className="w-4 h-4" />
+											Local Agent
+										</>
+									)}
 								</Button>
 								<Button
 									variant="default"
@@ -410,7 +472,7 @@ export default function TaskDetailModal({
 									) : (
 										<>
 											<Bot className="w-4 h-4" />
-											Start Cursor Agent
+											Cursor Agent
 										</>
 									)}
 								</Button>
@@ -426,5 +488,69 @@ export default function TaskDetailModal({
 				</div>
 			</DialogContent>
 		</Dialog>
+
+		{/* Local Agent Setup Modal */}
+		<Dialog open={localAgentModalOpen} onOpenChange={setLocalAgentModalOpen}>
+			<DialogContent className="max-w-xl">
+				<DialogHeader>
+					<DialogTitle className="flex items-center gap-2">
+						<Terminal className="w-5 h-5 text-green-500" />
+						Set Up Local Agent
+					</DialogTitle>
+					<DialogDescription>
+						Run this command in your terminal to connect Claude Code to this task.
+					</DialogDescription>
+				</DialogHeader>
+
+				<div className="space-y-4">
+					<div className="relative">
+						<pre className="bg-slate-900 text-slate-100 p-4 rounded-lg text-sm overflow-x-auto">
+							<code>{mcpCommand}</code>
+						</pre>
+						<Button
+							size="sm"
+							variant="secondary"
+							className="absolute top-2 right-2 gap-1.5"
+							onClick={handleCopyCommand}
+						>
+							{copied ? (
+								<>
+									<Check className="w-3.5 h-3.5" />
+									Copied!
+								</>
+							) : (
+								<>
+									<Copy className="w-3.5 h-3.5" />
+									Copy
+								</>
+							)}
+						</Button>
+					</div>
+
+					<div className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
+						<p><strong>After running the command:</strong></p>
+						<ol className="list-decimal list-inside space-y-1 ml-2">
+							<li>Claude Code will have access to this task&apos;s context</li>
+							<li>Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">resources/list</code> to see available context</li>
+							<li>Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">search_context</code> to search chat, docs, links</li>
+							<li>Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">mark_complete</code> when done</li>
+						</ol>
+					</div>
+
+					<div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+						<p className="text-sm text-amber-800 dark:text-amber-200">
+							<strong>Note:</strong> The token expires in 1 hour. Generate a new one if needed.
+						</p>
+					</div>
+				</div>
+
+				<div className="flex justify-end gap-2 pt-2">
+					<Button variant="outline" onClick={() => setLocalAgentModalOpen(false)}>
+						Done
+					</Button>
+				</div>
+			</DialogContent>
+		</Dialog>
+	</>
 	);
 }
