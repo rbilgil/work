@@ -9,6 +9,8 @@ import TaskCreateModal from "./TaskCreateModal";
 
 type Status = "backlog" | "todo" | "in_progress" | "in_review" | "done";
 
+type PlanStatus = "pending" | "generating" | "ready" | "failed";
+
 type Todo = {
 	_id: Id<"workspace_todos">;
 	title: string;
@@ -21,6 +23,7 @@ type Todo = {
 	currentAgentRunId?: Id<"agent_runs">;
 	prompt?: string;
 	plan?: string;
+	planStatus?: PlanStatus;
 };
 
 const COLUMNS: { id: Status; label: string; color: string }[] = [

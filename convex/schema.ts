@@ -109,11 +109,21 @@ export default defineSchema({
 	// Workspace Todos - Todos specific to a workspace (Kanban style)
 	workspace_todos: defineTable({
 		workspaceId: v.id("workspaces"),
+		parentId: v.optional(v.id("workspace_todos")), // For sub-tasks
 		title: v.string(),
 		description: v.optional(v.string()),
 		prompt: v.optional(v.string()), // User's original prompt/instructions for AI
 		plan: v.optional(v.string()), // AI-generated implementation plan (markdown)
 		planGeneratedAt: v.optional(v.number()), // Timestamp of last plan generation
+		planStatus: v.optional(
+			v.union(
+				v.literal("pending"), // Waiting to generate
+				v.literal("generating"), // Cursor agent is analyzing
+				v.literal("ready"), // Plan is ready
+				v.literal("failed"), // Generation failed
+			),
+		),
+		currentPlanningRunId: v.optional(v.id("agent_runs")), // Current planning agent run
 		status: v.union(
 			v.literal("backlog"),
 			v.literal("todo"),
@@ -132,7 +142,8 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_and_status", ["workspaceId", "status"])
-		.index("by_user", ["userId"]),
+		.index("by_user", ["userId"])
+		.index("by_parent", ["parentId"]),
 
 	// Todo Context References - Explicit links between todos and their context
 	todo_context_refs: defineTable({
@@ -162,6 +173,7 @@ export default defineSchema({
 		workspaceId: v.id("workspaces"),
 		userId: v.id("users"),
 		agentType: v.literal("cursor"),
+		runType: v.optional(v.union(v.literal("planning"), v.literal("implementation"))), // planning = plan generation, implementation = actual code work
 		externalAgentId: v.string(), // Cursor's agent ID (bc_xxx)
 		status: v.union(
 			v.literal("creating"),

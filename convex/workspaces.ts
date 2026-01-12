@@ -775,6 +775,7 @@ export const listWorkspaceTodos = query({
 			_id: v.id("workspace_todos"),
 			_creationTime: v.number(),
 			workspaceId: v.id("workspaces"),
+			parentId: v.optional(v.id("workspace_todos")),
 			title: v.string(),
 			description: v.optional(v.string()),
 			status: workspaceTodoStatus,
@@ -782,12 +783,22 @@ export const listWorkspaceTodos = query({
 			agentType: v.optional(v.union(v.literal("cursor"), v.literal("local"))),
 			agentPrompt: v.optional(v.string()),
 			currentAgentRunId: v.optional(v.id("agent_runs")),
+			currentPlanningRunId: v.optional(v.id("agent_runs")),
 			order: v.optional(v.number()),
 			userId: v.id("users"),
 			createdAt: v.number(),
 			completedAt: v.optional(v.number()),
 			prompt: v.optional(v.string()),
 			plan: v.optional(v.string()),
+			planGeneratedAt: v.optional(v.number()),
+			planStatus: v.optional(
+				v.union(
+					v.literal("pending"),
+					v.literal("generating"),
+					v.literal("ready"),
+					v.literal("failed"),
+				),
+			),
 		}),
 	),
 	handler: async (ctx, args) => {
@@ -800,9 +811,50 @@ export const listWorkspaceTodos = query({
 		if (!(await verifyWorkspaceAccess(ctx, args.workspaceId, user._id)))
 			return [];
 
-		return await ctx.db
+		// Only return top-level todos (not sub-tasks)
+		const todos = await ctx.db
 			.query("workspace_todos")
 			.withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+			.collect();
+
+		return todos.filter((t) => !t.parentId);
+	},
+});
+
+// List sub-tasks for a parent todo
+export const listSubTasks = query({
+	args: { parentId: v.id("workspace_todos") },
+	returns: v.array(
+		v.object({
+			_id: v.id("workspace_todos"),
+			_creationTime: v.number(),
+			workspaceId: v.id("workspaces"),
+			parentId: v.optional(v.id("workspace_todos")),
+			title: v.string(),
+			description: v.optional(v.string()),
+			status: workspaceTodoStatus,
+			assignee: v.optional(v.union(v.literal("user"), v.literal("agent"))),
+			order: v.optional(v.number()),
+			userId: v.id("users"),
+			createdAt: v.number(),
+		}),
+	),
+	handler: async (ctx, args) => {
+		const user = await getAuthUser(ctx);
+		if (!user) {
+			return [];
+		}
+
+		// Get parent to verify workspace access
+		const parent = await ctx.db.get(args.parentId);
+		if (!parent) return [];
+
+		if (!(await verifyWorkspaceAccess(ctx, parent.workspaceId, user._id)))
+			return [];
+
+		return await ctx.db
+			.query("workspace_todos")
+			.withIndex("by_parent", (q) => q.eq("parentId", args.parentId))
 			.collect();
 	},
 });
@@ -1140,6 +1192,7 @@ export const getTodoInternal = internalQuery({
 			plan: v.optional(v.string()),
 			status: v.string(),
 			workspaceId: v.id("workspaces"),
+			userId: v.id("users"),
 		}),
 		v.null(),
 	),
@@ -1154,6 +1207,7 @@ export const getTodoInternal = internalQuery({
 			plan: todo.plan,
 			status: todo.status,
 			workspaceId: todo.workspaceId,
+			userId: todo.userId,
 		};
 	},
 });
@@ -1181,6 +1235,72 @@ export const updateTodoPlanInternal = internalMutation({
 			plan: args.plan,
 			planGeneratedAt: Date.now(),
 		});
+		return null;
+	},
+});
+
+// Create a sub-task for a parent todo
+export const createSubTaskInternal = internalMutation({
+	args: {
+		parentId: v.id("workspace_todos"),
+		workspaceId: v.id("workspaces"),
+		userId: v.id("users"),
+		title: v.string(),
+		description: v.optional(v.string()),
+		assignee: v.union(v.literal("user"), v.literal("agent")),
+		order: v.number(),
+	},
+	returns: v.id("workspace_todos"),
+	handler: async (ctx, args) => {
+		return await ctx.db.insert("workspace_todos", {
+			workspaceId: args.workspaceId,
+			parentId: args.parentId,
+			title: args.title,
+			description: args.description,
+			status: "todo",
+			assignee: args.assignee,
+			order: args.order,
+			userId: args.userId,
+			createdAt: Date.now(),
+		});
+	},
+});
+
+// Delete all sub-tasks for a parent todo
+export const deleteSubTasksInternal = internalMutation({
+	args: {
+		parentId: v.id("workspace_todos"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const subTasks = await ctx.db
+			.query("workspace_todos")
+			.withIndex("by_parent", (q) => q.eq("parentId", args.parentId))
+			.collect();
+
+		for (const subTask of subTasks) {
+			await ctx.db.delete(subTask._id);
+		}
+		return null;
+	},
+});
+
+// Update todo description and plan (for regeneration)
+export const updateTodoContentInternal = internalMutation({
+	args: {
+		todoId: v.id("workspace_todos"),
+		description: v.optional(v.string()),
+		plan: v.optional(v.string()),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const updates: Record<string, unknown> = {};
+		if (args.description !== undefined) updates.description = args.description;
+		if (args.plan !== undefined) {
+			updates.plan = args.plan;
+			updates.planGeneratedAt = Date.now();
+		}
+		await ctx.db.patch(args.todoId, updates);
 		return null;
 	},
 });

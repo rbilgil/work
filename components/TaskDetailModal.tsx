@@ -1,7 +1,7 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
-import { Bot, ChevronDown, ChevronRight, MessageSquare, RefreshCw, Sparkles, User, Loader2, Terminal, Copy, Check } from "lucide-react";
+import { Bot, CheckCircle2, ChevronDown, ChevronRight, Circle, ListTodo, MessageSquare, RefreshCw, Sparkles, User, Loader2, Terminal, Copy, Check } from "lucide-react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,8 @@ interface ContextRef {
 	title?: string;
 }
 
+type PlanStatus = "pending" | "generating" | "ready" | "failed";
+
 interface TaskDetailModalProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -56,6 +58,7 @@ interface TaskDetailModalProps {
 		currentAgentRunId?: Id<"agent_runs">;
 		prompt?: string;
 		plan?: string;
+		planStatus?: PlanStatus;
 	};
 }
 
@@ -66,7 +69,6 @@ export default function TaskDetailModal({
 	todo,
 }: TaskDetailModalProps) {
 	const [isRegenerating, setIsRegenerating] = useState(false);
-	const [isRegeneratingPlan, setIsRegeneratingPlan] = useState(false);
 	const [isStartingAgent, setIsStartingAgent] = useState(false);
 	const [title, setTitle] = useState(todo.title);
 	const [description, setDescription] = useState(todo.description ?? "");
@@ -79,17 +81,16 @@ export default function TaskDetailModal({
 	const [isGeneratingMcp, setIsGeneratingMcp] = useState(false);
 	const [copied, setCopied] = useState(false);
 	const [planOpen, setPlanOpen] = useState(true);
+	const [subTasksOpen, setSubTasksOpen] = useState(true);
 	const [commentsOpen, setCommentsOpen] = useState(true);
 
-	const generateDescription = useAction(
-		api.workspaceAi.generateTaskDescription,
-	);
-	const regeneratePlanAction = useAction(api.ticketAi.regeneratePlan);
+	const regenerateTicket = useAction(api.ticketAi.regenerateTicket);
 	const updateTodo = useMutation(api.workspaces.updateWorkspaceTodo);
 	const queueForAgent = useMutation(api.workspaces.queueTodoForAgent);
 	const startCursorAgent = useAction(api.agentExecution.startCursorAgent);
 	const setContextRefsMutation = useMutation(api.todoContext.setContextRefs);
 	const generateMcpToken = useMutation(api.mcp.generateMcpToken);
+	const updateSubTaskStatus = useMutation(api.workspaces.updateWorkspaceTodo);
 
 	// Query for existing context refs
 	const existingRefs = useQuery(api.todoContext.getContextRefs, {
@@ -99,6 +100,11 @@ export default function TaskDetailModal({
 	// Check if workspace has required integrations for agent
 	const integrationStatus = useQuery(api.integrations.hasRequiredIntegrations, {
 		workspaceId,
+	});
+
+	// Query for sub-tasks
+	const subTasks = useQuery(api.workspaces.listSubTasks, {
+		parentId: todo._id,
 	});
 
 	const hasRequiredIntegrations = integrationStatus?.ready ?? false;
@@ -125,48 +131,29 @@ export default function TaskDetailModal({
 		}
 	}, [existingRefs]);
 
-	const handleRegenerate = async () => {
+	const handleRegenerateTicket = async () => {
 		setIsRegenerating(true);
 		try {
-			const result = await generateDescription({
-				workspaceId,
+			const result = await regenerateTicket({
 				todoId: todo._id,
-				taskTitle: title,
 			});
-
-			let fullDescription = result.description;
-			if (result.suggestedSteps && result.suggestedSteps.length > 0) {
-				fullDescription +=
-					"\n\n**Steps:**\n" +
-					result.suggestedSteps
-						.map((s: string, i: number) => `${i + 1}. ${s}`)
-						.join("\n");
+			if (!result.success && result.error) {
+				console.error("Failed to regenerate ticket:", result.error);
 			}
-
-			setDescription(fullDescription);
+			// The UI will update automatically via the query subscriptions
 		} catch (error) {
-			console.error("Failed to regenerate description:", error);
+			console.error("Failed to regenerate ticket:", error);
 		} finally {
 			setIsRegenerating(false);
 		}
 	};
 
-	const handleRegeneratePlan = async () => {
-		setIsRegeneratingPlan(true);
-		try {
-			const result = await regeneratePlanAction({
-				todoId: todo._id,
-			});
-			if (result.success && result.plan) {
-				setPlan(result.plan);
-			} else if (result.error) {
-				console.error("Failed to regenerate plan:", result.error);
-			}
-		} catch (error) {
-			console.error("Failed to regenerate plan:", error);
-		} finally {
-			setIsRegeneratingPlan(false);
-		}
+	const handleToggleSubTaskStatus = async (subTaskId: Id<"workspace_todos">, currentStatus: Status) => {
+		const newStatus = currentStatus === "done" ? "todo" : "done";
+		await updateSubTaskStatus({
+			id: subTaskId,
+			status: newStatus,
+		});
 	};
 
 	const handleSave = async () => {
@@ -288,10 +275,26 @@ export default function TaskDetailModal({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
 				<DialogHeader>
-					<DialogTitle className="flex items-center gap-2">
-						<Sparkles className="w-5 h-5 text-blue-500" />
-						Task Details
-					</DialogTitle>
+					<div className="flex items-center justify-between">
+						<DialogTitle className="flex items-center gap-2">
+							<Sparkles className="w-5 h-5 text-blue-500" />
+							Task Details
+						</DialogTitle>
+						{todo.prompt && isEditable && (
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={handleRegenerateTicket}
+								disabled={isRegenerating}
+								className="gap-2"
+							>
+								<RefreshCw
+									className={`w-4 h-4 ${isRegenerating ? "animate-spin" : ""}`}
+								/>
+								{isRegenerating ? "Regenerating..." : "Regenerate"}
+							</Button>
+						)}
+					</div>
 				</DialogHeader>
 
 				<div className="flex-1 overflow-y-auto space-y-4 pr-2">
@@ -340,34 +343,17 @@ export default function TaskDetailModal({
 
 					{/* Description */}
 					<div>
-						<div className="flex items-center justify-between mb-1.5">
-							<label htmlFor="task-desc" className="text-sm font-medium">
-								Description
-							</label>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={handleRegenerate}
-								disabled={isRegenerating || !isEditable}
-							>
-								<RefreshCw
-									className={`w-4 h-4 mr-2 ${isRegenerating ? "animate-spin" : ""}`}
-								/>
-								{isRegenerating ? "Generating..." : "Regenerate with AI"}
-							</Button>
-						</div>
+						<label htmlFor="task-desc" className="text-sm font-medium block mb-1.5">
+							Description
+						</label>
 						<Textarea
 							id="task-desc"
 							value={description}
 							onChange={(e) => setDescription(e.target.value)}
-							placeholder="Task description... (AI will auto-generate from chat context)"
-							className="min-h-[150px] resize-none"
+							placeholder="Task description..."
+							className="min-h-[100px] resize-none"
 							disabled={!isEditable}
 						/>
-						<p className="text-xs text-slate-500 mt-1">
-							AI uses your workspace chat to generate detailed task
-							descriptions.
-						</p>
 					</div>
 
 					<Separator />
@@ -409,39 +395,140 @@ export default function TaskDetailModal({
 					)}
 
 					{/* Implementation Plan */}
-					{(plan || todo.plan) && (
+					{(plan || todo.plan || todo.planStatus === "generating" || todo.planStatus === "pending" || todo.planStatus === "failed") && (
 						<>
 							<Separator />
 							<Collapsible open={planOpen} onOpenChange={setPlanOpen}>
-								<div className="flex items-center justify-between">
-									<CollapsibleTrigger asChild>
-										<button
-											type="button"
-											className="flex items-center gap-2 text-sm font-medium hover:text-blue-600 transition-colors"
-										>
-											{planOpen ? (
-												<ChevronDown className="w-4 h-4" />
-											) : (
-												<ChevronRight className="w-4 h-4" />
-											)}
-											Implementation Plan
-										</button>
-									</CollapsibleTrigger>
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={handleRegeneratePlan}
-										disabled={isRegeneratingPlan}
+								<CollapsibleTrigger asChild>
+									<button
+										type="button"
+										className="flex items-center gap-2 text-sm font-medium hover:text-blue-600 transition-colors"
 									>
-										<RefreshCw
-											className={`w-4 h-4 mr-2 ${isRegeneratingPlan ? "animate-spin" : ""}`}
-										/>
-										{isRegeneratingPlan ? "Regenerating..." : "Regenerate"}
-									</Button>
-								</div>
+										{planOpen ? (
+											<ChevronDown className="w-4 h-4" />
+										) : (
+											<ChevronRight className="w-4 h-4" />
+										)}
+										Implementation Plan
+										{(todo.planStatus === "generating" || todo.planStatus === "pending") && (
+											<span className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 font-normal">
+												<Loader2 className="w-3 h-3 animate-spin" />
+												Analyzing codebase...
+											</span>
+										)}
+										{todo.planStatus === "failed" && (
+											<span className="text-xs text-red-600 dark:text-red-400 font-normal">
+												Failed
+											</span>
+										)}
+									</button>
+								</CollapsibleTrigger>
 								<CollapsibleContent className="mt-3">
-									<div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2">
-										<ReactMarkdown>{plan || todo.plan || ""}</ReactMarkdown>
+									{(todo.planStatus === "generating" || todo.planStatus === "pending") ? (
+										<div className="p-6 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-3">
+											<div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
+												<Loader2 className="w-5 h-5 animate-spin" />
+												<span className="text-sm font-medium">Cursor is analyzing the codebase...</span>
+											</div>
+											<p className="text-xs text-slate-500 text-center max-w-sm">
+												The AI agent is exploring your repository to create a detailed implementation plan. This typically takes 1-2 minutes.
+											</p>
+										</div>
+									) : todo.planStatus === "failed" ? (
+										<div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-center">
+											<p className="text-sm text-red-600 dark:text-red-400">
+												Failed to generate plan. You can try regenerating or write the plan manually.
+											</p>
+										</div>
+									) : (
+										<div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2">
+											<ReactMarkdown>{plan || todo.plan || ""}</ReactMarkdown>
+										</div>
+									)}
+								</CollapsibleContent>
+							</Collapsible>
+						</>
+					)}
+
+					{/* Sub-Tasks Section */}
+					{subTasks && subTasks.length > 0 && (
+						<>
+							<Separator />
+							<Collapsible open={subTasksOpen} onOpenChange={setSubTasksOpen}>
+								<CollapsibleTrigger asChild>
+									<button
+										type="button"
+										className="flex items-center gap-2 text-sm font-medium hover:text-blue-600 transition-colors"
+									>
+										{subTasksOpen ? (
+											<ChevronDown className="w-4 h-4" />
+										) : (
+											<ChevronRight className="w-4 h-4" />
+										)}
+										<ListTodo className="w-4 h-4" />
+										Sub-Tasks
+										<span className="text-xs text-slate-500 font-normal">
+											({subTasks.filter((t) => t.status === "done").length}/{subTasks.length})
+										</span>
+									</button>
+								</CollapsibleTrigger>
+								<CollapsibleContent className="mt-3">
+									<div className="space-y-2">
+										{subTasks.map((subTask) => (
+											<div
+												key={subTask._id}
+												className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+											>
+												<button
+													type="button"
+													onClick={() => handleToggleSubTaskStatus(subTask._id, subTask.status)}
+													className="mt-0.5 flex-shrink-0"
+												>
+													{subTask.status === "done" ? (
+														<CheckCircle2 className="w-5 h-5 text-green-500" />
+													) : (
+														<Circle className="w-5 h-5 text-slate-400 hover:text-slate-600" />
+													)}
+												</button>
+												<div className="flex-1 min-w-0">
+													<div className="flex items-center gap-2">
+														<span
+															className={`text-sm font-medium ${
+																subTask.status === "done"
+																	? "line-through text-slate-400"
+																	: ""
+															}`}
+														>
+															{subTask.title}
+														</span>
+														<span
+															className={`text-xs px-1.5 py-0.5 rounded ${
+																subTask.assignee === "agent"
+																	? "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300"
+																	: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
+															}`}
+														>
+															{subTask.assignee === "agent" ? (
+																<span className="flex items-center gap-1">
+																	<Bot className="w-3 h-3" />
+																	Agent
+																</span>
+															) : (
+																<span className="flex items-center gap-1">
+																	<User className="w-3 h-3" />
+																	You
+																</span>
+															)}
+														</span>
+													</div>
+													{subTask.description && (
+														<p className="text-xs text-slate-500 mt-1">
+															{subTask.description}
+														</p>
+													)}
+												</div>
+											</div>
+										))}
 									</div>
 								</CollapsibleContent>
 							</Collapsible>

@@ -6,7 +6,8 @@
       "Bash(npx convex codegen)",
       "Bash(npx convex dev:*)",
       "Bash(npm run build:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(grep:*)"
     ]
   }
 }

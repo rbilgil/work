@@ -54,6 +54,7 @@ export const createAgentRun = internalMutation({
 		workspaceId: v.id("workspaces"),
 		userId: v.id("users"),
 		externalAgentId: v.string(),
+		runType: v.optional(v.union(v.literal("planning"), v.literal("implementation"))),
 	},
 	handler: async (ctx, args) => {
 		return await ctx.db.insert("agent_runs", {
@@ -61,6 +62,7 @@ export const createAgentRun = internalMutation({
 			workspaceId: args.workspaceId,
 			userId: args.userId,
 			agentType: "cursor",
+			runType: args.runType ?? "implementation",
 			externalAgentId: args.externalAgentId,
 			status: "creating",
 			startedAt: Date.now(),
@@ -69,7 +71,7 @@ export const createAgentRun = internalMutation({
 });
 
 /**
- * Update todo when agent starts
+ * Update todo when agent starts (implementation run)
  */
 export const updateTodoForAgentStart = internalMutation({
 	args: {
@@ -82,6 +84,54 @@ export const updateTodoForAgentStart = internalMutation({
 			assignee: "agent",
 			agentType: "cursor",
 			currentAgentRunId: args.agentRunId,
+		});
+	},
+});
+
+/**
+ * Update todo when planning agent starts
+ */
+export const updateTodoForPlanningStart = internalMutation({
+	args: {
+		todoId: v.id("workspace_todos"),
+		agentRunId: v.id("agent_runs"),
+	},
+	handler: async (ctx, args) => {
+		await ctx.db.patch(args.todoId, {
+			planStatus: "generating",
+			currentPlanningRunId: args.agentRunId,
+		});
+	},
+});
+
+/**
+ * Update todo when planning completes successfully
+ */
+export const updateTodoWithPlan = internalMutation({
+	args: {
+		todoId: v.id("workspace_todos"),
+		plan: v.string(),
+	},
+	handler: async (ctx, args) => {
+		await ctx.db.patch(args.todoId, {
+			plan: args.plan,
+			planStatus: "ready",
+			planGeneratedAt: Date.now(),
+		});
+	},
+});
+
+/**
+ * Update todo when planning fails
+ */
+export const updateTodoPlanningFailed = internalMutation({
+	args: {
+		todoId: v.id("workspace_todos"),
+		errorMessage: v.optional(v.string()),
+	},
+	handler: async (ctx, args) => {
+		await ctx.db.patch(args.todoId, {
+			planStatus: "failed",
 		});
 	},
 });
@@ -177,12 +227,17 @@ export const getAgentRunByExternalId = internalQuery({
 		externalAgentId: v.string(),
 	},
 	handler: async (ctx, args) => {
-		return await ctx.db
+		const run = await ctx.db
 			.query("agent_runs")
 			.withIndex("by_external_agent_id", (q) =>
 				q.eq("externalAgentId", args.externalAgentId),
 			)
 			.first();
+		if (!run) return null;
+		return {
+			...run,
+			runType: run.runType ?? "implementation", // Default for old records
+		};
 	},
 });
 

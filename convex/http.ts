@@ -34,41 +34,60 @@ http.route({
 	path: "/webhooks/cursor",
 	method: "POST",
 	handler: httpAction(async (ctx, request) => {
+		console.log("\n" + "=".repeat(60));
+		console.log("[WEBHOOK] Cursor webhook received at", new Date().toISOString());
+		console.log("=".repeat(60));
+
 		try {
 			const body = await request.text();
 			const signature = request.headers.get("X-Cursor-Signature");
+			console.log("[WEBHOOK] Body length:", body.length, "chars");
+			console.log("[WEBHOOK] Has signature:", !!signature);
 
 			// Verify webhook signature
 			const secret = process.env.CURSOR_WEBHOOK_SECRET;
 			if (secret && signature) {
 				const isValid = await verifyHmacSignature(secret, body, signature);
 				if (!isValid) {
-					console.error("Invalid Cursor webhook signature");
+					console.error("[WEBHOOK] ERROR: Invalid signature");
 					return new Response("Invalid signature", { status: 401 });
 				}
+				console.log("[WEBHOOK] Signature verified");
 			}
 
 			const payload = JSON.parse(body);
-			console.log("Cursor webhook received:", payload);
+			console.log("[WEBHOOK] === PAYLOAD START ===");
+			console.log(JSON.stringify(payload, null, 2));
+			console.log("[WEBHOOK] === PAYLOAD END ===");
 
 			// Extract agent info from payload
 			const agentId = payload.id || payload.agentId;
 			const status = payload.status?.toLowerCase();
+			console.log("[WEBHOOK] Agent ID:", agentId);
+			console.log("[WEBHOOK] Status:", status);
 
 			if (!agentId) {
+				console.log("[WEBHOOK] ERROR: Missing agent ID");
 				return new Response("Missing agent ID", { status: 400 });
 			}
 
 			// Find the agent run by external ID
+			console.log("[WEBHOOK] Looking up agent run by external ID...");
 			const agentRun = await ctx.runQuery(
 				internal.agentExecutionMutations.getAgentRunByExternalId,
 				{ externalAgentId: agentId },
 			);
 
 			if (!agentRun) {
-				console.log(`No agent run found for Cursor agent: ${agentId}`);
+				console.log(`[WEBHOOK] ERROR: No agent run found for Cursor agent: ${agentId}`);
 				return new Response("Agent not found", { status: 404 });
 			}
+			console.log("[WEBHOOK] Agent run found:", {
+				agentRunId: agentRun._id,
+				todoId: agentRun.todoId,
+				runType: agentRun.runType,
+				currentStatus: agentRun.status,
+			});
 
 			// Map Cursor status to our status
 			let mappedStatus: "creating" | "running" | "finished" | "failed" =
@@ -86,6 +105,7 @@ http.route({
 			} else if (status === "failed" || status === "error") {
 				mappedStatus = "failed";
 			}
+			console.log("[WEBHOOK] Mapped status:", mappedStatus);
 
 			// Extract PR info if available
 			const prUrl =
@@ -95,10 +115,23 @@ http.route({
 				payload.pr?.number ||
 				payload.pullRequest?.number ||
 				(prUrl ? parseInt(prUrl.split("/").pop() || "0") : undefined);
-			const summary = payload.summary || payload.result?.summary;
+			const summary = payload.summary || payload.result?.summary || payload.output || payload.result?.output;
 			const errorMessage = payload.error || payload.errorMessage;
+			console.log("[WEBHOOK] Extracted data:", {
+				prUrl: prUrl || "(none)",
+				prNumber: prNumber || "(none)",
+				hasSummary: !!summary,
+				summaryLength: summary?.length || 0,
+				errorMessage: errorMessage || "(none)",
+			});
+			if (summary) {
+				console.log("[WEBHOOK] === SUMMARY/PLAN START ===");
+				console.log(summary.slice(0, 2000) + (summary.length > 2000 ? "... (truncated)" : ""));
+				console.log("[WEBHOOK] === SUMMARY/PLAN END ===");
+			}
 
 			// Update the agent run
+			console.log("[WEBHOOK] Updating agent run status...");
 			await ctx.runMutation(
 				internal.agentExecutionMutations.updateAgentRunStatus,
 				{
@@ -110,7 +143,59 @@ http.route({
 					errorMessage,
 				},
 			);
+			console.log("[WEBHOOK] Agent run status updated");
 
+			// Handle planning run completion
+			if (agentRun.runType === "planning" && mappedStatus === "finished") {
+				console.log("[WEBHOOK] This is a PLANNING run that FINISHED");
+				// Planning run finished - update todo with the plan
+				if (summary) {
+					console.log("[WEBHOOK] Updating todo with plan...");
+					// Update the todo with the plan
+					await ctx.runMutation(
+						internal.agentExecutionMutations.updateTodoWithPlan,
+						{
+							todoId: agentRun.todoId,
+							plan: summary,
+						},
+					);
+					console.log("[WEBHOOK] Todo updated with plan");
+
+					// Generate sub-tasks from the plan
+					console.log("[WEBHOOK] Scheduling sub-task generation...");
+					await ctx.scheduler.runAfter(0, internal.ticketAi.generateSubTasksFromPlan, {
+						todoId: agentRun.todoId,
+						plan: summary,
+					});
+					console.log("[WEBHOOK] Sub-task generation scheduled");
+				} else {
+					console.log("[WEBHOOK] ERROR: No summary/plan returned from agent");
+					// No summary returned - mark planning as failed
+					await ctx.runMutation(
+						internal.agentExecutionMutations.updateTodoPlanningFailed,
+						{
+							todoId: agentRun.todoId,
+							errorMessage: "No plan returned from agent",
+						},
+					);
+				}
+			} else if (agentRun.runType === "planning" && mappedStatus === "failed") {
+				console.log("[WEBHOOK] This is a PLANNING run that FAILED");
+				// Planning run failed
+				await ctx.runMutation(
+					internal.agentExecutionMutations.updateTodoPlanningFailed,
+					{
+						todoId: agentRun.todoId,
+						errorMessage: errorMessage || "Planning failed",
+					},
+				);
+			} else {
+				console.log("[WEBHOOK] This is an IMPLEMENTATION run with status:", mappedStatus);
+			}
+
+			console.log("=".repeat(60));
+			console.log("[WEBHOOK] Webhook processing complete");
+			console.log("=".repeat(60) + "\n");
 			return new Response("OK", { status: 200 });
 		} catch (error) {
 			console.error("Error processing Cursor webhook:", error);
