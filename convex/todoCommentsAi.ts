@@ -8,9 +8,7 @@ import { internalAction } from "./_generated/server";
 
 function selectModel() {
 	const modelName = process.env.AI_MODEL || "google/gemini-3-flash";
-	if (!process.env.GOOGLE_API_KEY) {
-		throw new Error("GOOGLE_API_KEY not configured");
-	}
+
 	return modelName;
 }
 

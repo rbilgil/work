@@ -1,15 +1,10 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
-import { Bot, CheckCircle2, ChevronDown, ChevronRight, Circle, ListTodo, MessageSquare, RefreshCw, Sparkles, User, Loader2, Terminal, Copy, Check } from "lucide-react";
+import { Bot, CheckCircle2, Circle, ListTodo, MessageSquare, RefreshCw, User, Loader2, Terminal, Copy, Check, MoreHorizontal, Link2, FileText, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
-import {
-	Collapsible,
-	CollapsibleContent,
-	CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import {
 	Dialog,
 	DialogContent,
@@ -17,7 +12,13 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
 	Select,
 	SelectContent,
@@ -25,8 +26,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import AgentStatusCard from "./AgentStatusCard";
@@ -80,9 +79,10 @@ export default function TaskDetailModal({
 	const [mcpCommand, setMcpCommand] = useState<string | null>(null);
 	const [isGeneratingMcp, setIsGeneratingMcp] = useState(false);
 	const [copied, setCopied] = useState(false);
-	const [planOpen, setPlanOpen] = useState(false);
-	const [subTasksOpen, setSubTasksOpen] = useState(true);
-	const [commentsOpen, setCommentsOpen] = useState(true);
+	const [planExpanded, setPlanExpanded] = useState(false);
+	const [showContext, setShowContext] = useState(false);
+	const [isEditingTitle, setIsEditingTitle] = useState(false);
+	const [isEditingDescription, setIsEditingDescription] = useState(false);
 
 	const regenerateTicket = useAction(api.ticketAi.regenerateTicket);
 	const updateTodo = useMutation(api.workspaces.updateWorkspaceTodo);
@@ -270,301 +270,146 @@ export default function TaskDetailModal({
 
 	const isEditable = !isAgentRunning;
 
+	// Status badge colors
+	const statusConfig: Record<Status, { label: string; color: string }> = {
+		backlog: { label: "Backlog", color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" },
+		todo: { label: "Todo", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400" },
+		in_progress: { label: "In Progress", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400" },
+		in_review: { label: "In Review", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-400" },
+		done: { label: "Done", color: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400" },
+	};
+
 	return (
 	<>
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-				<DialogHeader>
-					<div className="flex items-center justify-between">
-						<DialogTitle className="flex items-center gap-2">
-							<Sparkles className="w-5 h-5 text-blue-500" />
-							Task Details
-						</DialogTitle>
-						{todo.prompt && isEditable && (
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={handleRegenerateTicket}
-								disabled={isRegenerating}
-								className="gap-2"
-							>
-								<RefreshCw
-									className={`w-4 h-4 ${isRegenerating ? "animate-spin" : ""}`}
-								/>
-								{isRegenerating ? "Regenerating..." : "Regenerate"}
-							</Button>
-						)}
-					</div>
-				</DialogHeader>
-
-				<div className="flex-1 overflow-y-auto space-y-4 pr-2">
-					{/* Title */}
-					<div>
-						<label
-							htmlFor="task-title"
-							className="text-sm font-medium block mb-1.5"
-						>
-							Title
-						</label>
-						<Input
-							id="task-title"
-							value={title}
-							onChange={(e) => setTitle(e.target.value)}
-							placeholder="Task title..."
-							disabled={!isEditable}
-						/>
-					</div>
-
-					{/* Status */}
-					<div>
-						<label
-							htmlFor="task-status"
-							className="text-sm font-medium block mb-1.5"
-						>
-							Status
-						</label>
+			<DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+				{/* Header Bar */}
+				<div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 dark:border-slate-700">
+					<div className="flex items-center gap-3">
+						{/* Status Badge */}
 						<Select
 							value={status}
 							onValueChange={(v) => setStatus(v as Status)}
 							disabled={!isEditable}
 						>
-							<SelectTrigger id="task-status">
+							<SelectTrigger className={`h-7 w-auto gap-1.5 text-xs font-medium border-0 ${statusConfig[status].color}`}>
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value="backlog">Backlog</SelectItem>
-								<SelectItem value="todo">To Do</SelectItem>
+								<SelectItem value="todo">Todo</SelectItem>
 								<SelectItem value="in_progress">In Progress</SelectItem>
 								<SelectItem value="in_review">In Review</SelectItem>
 								<SelectItem value="done">Done</SelectItem>
 							</SelectContent>
 						</Select>
-					</div>
 
-					{/* Description */}
-					<div>
-						<label htmlFor="task-desc" className="text-sm font-medium block mb-1.5">
-							Description
-						</label>
-						<Textarea
-							id="task-desc"
-							value={description}
-							onChange={(e) => setDescription(e.target.value)}
-							placeholder="Task description..."
-							className="min-h-[100px] resize-none"
-							disabled={!isEditable}
-						/>
-					</div>
-
-					<Separator />
-
-					{/* Linked Context */}
-					<div>
-						<label className="text-sm font-medium block mb-2">
-							Linked Context
-						</label>
-						<p className="text-xs text-slate-500 mb-3">
-							Link relevant messages, docs, or links that the agent should
-							reference.
-						</p>
-						<ContextRefSelector
-							workspaceId={workspaceId}
-							todoId={todo._id}
-							todoTitle={title}
-							selectedRefs={contextRefs}
-							onRefsChange={setContextRefs}
-							compact={false}
-						/>
-					</div>
-
-					{/* Original Prompt */}
-					{todo.prompt && (
-						<>
-							<Separator />
-							<div>
-								<label className="text-sm font-medium block mb-2">
-									Original Prompt
-								</label>
-								<div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-									<p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-										{todo.prompt}
-									</p>
-								</div>
+						{/* Assignee Badge */}
+						{todo.assignee && (
+							<div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md ${
+								todo.assignee === "agent"
+									? "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-400"
+									: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400"
+							}`}>
+								{todo.assignee === "agent" ? <Bot className="w-3 h-3" /> : <User className="w-3 h-3" />}
+								{todo.assignee === "agent" ? (todo.agentType === "local" ? "Local Agent" : "Agent") : "You"}
 							</div>
-						</>
-					)}
+						)}
+					</div>
 
-					{/* Implementation Plan */}
-					{(plan || todo.plan || todo.planStatus === "generating" || todo.planStatus === "pending" || todo.planStatus === "failed") && (
-						<>
-							<Separator />
-							<Collapsible open={planOpen} onOpenChange={setPlanOpen}>
-								<CollapsibleTrigger asChild>
-									<button
-										type="button"
-										className="flex items-center gap-2 text-sm font-medium hover:text-blue-600 transition-colors"
-									>
-										{planOpen ? (
-											<ChevronDown className="w-4 h-4" />
-										) : (
-											<ChevronRight className="w-4 h-4" />
-										)}
-										Implementation Plan
-										{(todo.planStatus === "generating" || todo.planStatus === "pending") && (
-											<span className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 font-normal">
-												<Loader2 className="w-3 h-3 animate-spin" />
-												Analyzing codebase...
-											</span>
-										)}
-										{todo.planStatus === "failed" && (
-											<span className="text-xs text-red-600 dark:text-red-400 font-normal">
-												Failed
-											</span>
-										)}
-									</button>
-								</CollapsibleTrigger>
-								<CollapsibleContent className="mt-3">
-									{(todo.planStatus === "generating" || todo.planStatus === "pending") ? (
-										<div className="p-6 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-3">
-											<div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
-												<Loader2 className="w-5 h-5 animate-spin" />
-												<span className="text-sm font-medium">Analyzing codebase...</span>
-											</div>
-											<p className="text-xs text-slate-500 text-center max-w-sm">
-												OpenCode is exploring your repository to create a detailed implementation plan. This typically takes 1-2 minutes.
-											</p>
-										</div>
-									) : todo.planStatus === "failed" ? (
-										<div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-center">
-											<p className="text-sm text-red-600 dark:text-red-400">
-												Failed to generate plan. You can try regenerating or write the plan manually.
-											</p>
-										</div>
-									) : (
-										<div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 prose prose-xs max-w-none dark:prose-invert prose-p:my-1 prose-p:text-xs prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-li:text-xs prose-headings:mt-2 prose-headings:mb-1 prose-headings:text-sm prose-h1:text-base prose-h2:text-sm prose-h3:text-sm prose-code:text-xs prose-pre:my-1 prose-pre:text-xs">
-											<ReactMarkdown>{plan || todo.plan || ""}</ReactMarkdown>
-										</div>
-									)}
-								</CollapsibleContent>
-							</Collapsible>
-						</>
-					)}
-
-					{/* Sub-Tasks Section */}
-					{subTasks && subTasks.length > 0 && (
-						<>
-							<Separator />
-							<Collapsible open={subTasksOpen} onOpenChange={setSubTasksOpen}>
-								<CollapsibleTrigger asChild>
-									<button
-										type="button"
-										className="flex items-center gap-2 text-sm font-medium hover:text-blue-600 transition-colors"
-									>
-										{subTasksOpen ? (
-											<ChevronDown className="w-4 h-4" />
-										) : (
-											<ChevronRight className="w-4 h-4" />
-										)}
-										<ListTodo className="w-4 h-4" />
-										Sub-Tasks
-										<span className="text-xs text-slate-500 font-normal">
-											({subTasks.filter((t) => t.status === "done").length}/{subTasks.length})
-										</span>
-									</button>
-								</CollapsibleTrigger>
-								<CollapsibleContent className="mt-3">
-									<div className="space-y-2">
-										{subTasks.map((subTask) => (
-											<div
-												key={subTask._id}
-												className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
-											>
-												<button
-													type="button"
-													onClick={() => handleToggleSubTaskStatus(subTask._id, subTask.status)}
-													className="mt-0.5 flex-shrink-0"
-												>
-													{subTask.status === "done" ? (
-														<CheckCircle2 className="w-5 h-5 text-green-500" />
-													) : (
-														<Circle className="w-5 h-5 text-slate-400 hover:text-slate-600" />
-													)}
-												</button>
-												<div className="flex-1 min-w-0">
-													<div className="flex items-center gap-2">
-														<span
-															className={`text-sm font-medium ${
-																subTask.status === "done"
-																	? "line-through text-slate-400"
-																	: ""
-															}`}
-														>
-															{subTask.title}
-														</span>
-														<span
-															className={`text-xs px-1.5 py-0.5 rounded ${
-																subTask.assignee === "agent"
-																	? "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300"
-																	: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
-															}`}
-														>
-															{subTask.assignee === "agent" ? (
-																<span className="flex items-center gap-1">
-																	<Bot className="w-3 h-3" />
-																	Agent
-																</span>
-															) : (
-																<span className="flex items-center gap-1">
-																	<User className="w-3 h-3" />
-																	You
-																</span>
-															)}
-														</span>
-													</div>
-													{subTask.description && (
-														<p className="text-xs text-slate-500 mt-1">
-															{subTask.description}
-														</p>
-													)}
-												</div>
-											</div>
-										))}
-									</div>
-								</CollapsibleContent>
-							</Collapsible>
-						</>
-					)}
-
-					{/* Comments Section */}
-					<Separator />
-					<Collapsible open={commentsOpen} onOpenChange={setCommentsOpen}>
-						<CollapsibleTrigger asChild>
-							<button
-								type="button"
-								className="flex items-center gap-2 text-sm font-medium hover:text-blue-600 transition-colors"
+					<div className="flex items-center gap-2">
+						{/* Regenerate Button */}
+						{todo.prompt && isEditable && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={handleRegenerateTicket}
+								disabled={isRegenerating}
+								className="h-7 gap-1.5 text-xs"
 							>
-								{commentsOpen ? (
-									<ChevronDown className="w-4 h-4" />
-								) : (
-									<ChevronRight className="w-4 h-4" />
+								<RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? "animate-spin" : ""}`} />
+								{isRegenerating ? "Regenerating..." : "Regenerate"}
+							</Button>
+						)}
+
+						{/* More Menu */}
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+									<MoreHorizontal className="w-4 h-4" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem onClick={() => setShowContext(!showContext)}>
+									<Link2 className="w-4 h-4 mr-2" />
+									{showContext ? "Hide" : "Show"} Linked Context
+								</DropdownMenuItem>
+								{todo.prompt && (
+									<DropdownMenuItem onClick={() => {}}>
+										<FileText className="w-4 h-4 mr-2" />
+										View Original Prompt
+									</DropdownMenuItem>
 								)}
-								<MessageSquare className="w-4 h-4" />
-								Comments
-							</button>
-						</CollapsibleTrigger>
-						<CollapsibleContent className="mt-3">
-							<TodoComments todoId={todo._id} />
-						</CollapsibleContent>
-					</Collapsible>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem className="text-red-600">
+									Delete Task
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
+				</div>
 
-					<Separator />
+				{/* Main Content */}
+				<div className="flex-1 overflow-y-auto px-6 py-4">
+					{/* Title - Large, prominent */}
+					<div className="mb-4">
+						{isEditingTitle ? (
+							<input
+								type="text"
+								value={title}
+								onChange={(e) => setTitle(e.target.value)}
+								onBlur={() => setIsEditingTitle(false)}
+								onKeyDown={(e) => e.key === "Enter" && setIsEditingTitle(false)}
+								autoFocus
+								className="w-full text-xl font-semibold bg-transparent border-0 outline-none focus:ring-0 p-0"
+								placeholder="Task title..."
+							/>
+						) : (
+							<h1
+								className="text-xl font-semibold cursor-text hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded px-1 -mx-1 py-0.5"
+								onClick={() => isEditable && setIsEditingTitle(true)}
+							>
+								{title || "Untitled"}
+							</h1>
+						)}
+					</div>
 
-					{/* Agent Status Card (if agent is assigned) */}
+					{/* Description - Inline editable */}
+					<div className="mb-6">
+						{isEditingDescription ? (
+							<textarea
+								value={description}
+								onChange={(e) => setDescription(e.target.value)}
+								onBlur={() => setIsEditingDescription(false)}
+								autoFocus
+								className="w-full text-sm text-slate-600 dark:text-slate-400 bg-transparent border-0 outline-none focus:ring-0 p-0 resize-none min-h-[60px]"
+								placeholder="Add a description..."
+							/>
+						) : (
+							<p
+								className={`text-sm cursor-text hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded px-1 -mx-1 py-1 ${
+									description ? "text-slate-600 dark:text-slate-400" : "text-slate-400 dark:text-slate-500"
+								}`}
+								onClick={() => isEditable && setIsEditingDescription(true)}
+							>
+								{description || "Add a description..."}
+							</p>
+						)}
+					</div>
+
+					{/* Agent Status Card (if running) */}
 					{todo.currentAgentRunId && (
-						<div>
-							<label className="text-sm font-medium block mb-2">
-								Agent Status
-							</label>
+						<div className="mb-6">
 							<AgentStatusCard
 								todoId={todo._id}
 								onRetry={handleStartAgent}
@@ -572,118 +417,212 @@ export default function TaskDetailModal({
 						</div>
 					)}
 
-					{/* Assignee and Agent Controls */}
-					<div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200/70 dark:border-white/10">
-						<div className="flex items-center justify-between">
-							<div className="flex items-center gap-2 text-sm">
-								<span className="text-slate-500">Assigned to:</span>
-								{todo.assignee === "agent" && todo.agentType === "local" ? (
-									<span className="flex items-center gap-1.5 text-green-600 dark:text-green-400 font-medium">
-										<Terminal className="w-4 h-4" />
-										Local Agent (Claude Code)
+					{/* Sub-Tasks Section */}
+					<div className="mb-6">
+						<div className="flex items-center justify-between mb-3">
+							<h2 className="text-sm font-medium flex items-center gap-2">
+								<ListTodo className="w-4 h-4 text-slate-500" />
+								Sub-tasks
+								{subTasks && subTasks.length > 0 && (
+									<span className="text-xs text-slate-500 font-normal">
+										{subTasks.filter((t) => t.status === "done").length}/{subTasks.length}
 									</span>
-								) : todo.assignee === "agent" ? (
-									<span className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-medium">
-										<Bot className="w-4 h-4" />
-										Cursor Agent
-										{isAgentRunning && (
-											<span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
-										)}
-									</span>
-								) : todo.assignee === "user" ? (
-									<span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium">
-										<User className="w-4 h-4" />
-										You
-									</span>
-								) : (
-									<span className="text-slate-400">Unassigned</span>
 								)}
-							</div>
+							</h2>
+							<Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-slate-500 hover:text-slate-700">
+								<Plus className="w-3.5 h-3.5" />
+								Add
+							</Button>
 						</div>
 
-						{/* Integration status warning */}
-						{!hasRequiredIntegrations && (
-							<p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-								{integrationStatus && !integrationStatus.cursor &&
-									"Cursor API key not configured. "}
-								{integrationStatus && !integrationStatus.repo && "No GitHub repository connected. "}
-								Configure in Settings to use agents.
-							</p>
+						{subTasks && subTasks.length > 0 ? (
+							<div className="space-y-1">
+								{subTasks.map((subTask) => (
+									<div
+										key={subTask._id}
+										className="flex items-center gap-3 py-2 px-2 -mx-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800/50 group"
+									>
+										<button
+											type="button"
+											onClick={() => handleToggleSubTaskStatus(subTask._id, subTask.status)}
+											className="flex-shrink-0"
+										>
+											{subTask.status === "done" ? (
+												<CheckCircle2 className="w-4 h-4 text-green-500" />
+											) : (
+												<Circle className="w-4 h-4 text-slate-300 group-hover:text-slate-400" />
+											)}
+										</button>
+										<span className={`flex-1 text-sm ${subTask.status === "done" ? "line-through text-slate-400" : ""}`}>
+											{subTask.title}
+										</span>
+										<span className={`text-xs px-1.5 py-0.5 rounded ${
+											subTask.assignee === "agent"
+												? "bg-purple-100 text-purple-600 dark:bg-purple-900/50 dark:text-purple-400"
+												: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+										}`}>
+											{subTask.assignee === "agent" ? "Agent" : "You"}
+										</span>
+									</div>
+								))}
+							</div>
+						) : (
+							<p className="text-sm text-slate-400 py-2">No sub-tasks yet</p>
 						)}
+					</div>
 
+					{/* Implementation Plan */}
+					{(plan || todo.plan || todo.planStatus === "generating" || todo.planStatus === "pending" || todo.planStatus === "failed") && (
+						<div className="mb-6">
+							<h2 className="text-sm font-medium mb-3 flex items-center gap-2">
+								<FileText className="w-4 h-4 text-slate-500" />
+								Implementation Plan
+								{(todo.planStatus === "generating" || todo.planStatus === "pending") && (
+									<span className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 font-normal">
+										<Loader2 className="w-3 h-3 animate-spin" />
+										Analyzing...
+									</span>
+								)}
+							</h2>
+
+							{(todo.planStatus === "generating" || todo.planStatus === "pending") ? (
+								<div className="p-4 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+									<div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 mb-1">
+										<Loader2 className="w-4 h-4 animate-spin" />
+										<span className="text-sm font-medium">Analyzing codebase...</span>
+									</div>
+									<p className="text-xs text-purple-600/70 dark:text-purple-400/70">
+										OpenCode is exploring your repository to create a detailed plan.
+									</p>
+								</div>
+							) : todo.planStatus === "failed" ? (
+								<div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+									<p className="text-sm text-red-600 dark:text-red-400">
+										Failed to generate plan. Try regenerating.
+									</p>
+								</div>
+							) : (
+								<div>
+									<div className="relative">
+										<div className={`prose prose-sm dark:prose-invert max-w-none overflow-hidden ${!planExpanded ? "max-h-48" : ""}`}>
+											<div className="text-sm text-slate-700 dark:text-slate-300 [&_h1]:text-base [&_h1]:font-semibold [&_h1]:mt-4 [&_h1]:mb-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-3 [&_h2]:mb-1.5 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:mt-2 [&_h3]:mb-1 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:pl-5 [&_li]:my-0.5 [&_code]:text-xs [&_code]:bg-slate-100 [&_code]:dark:bg-slate-800 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_pre]:text-xs [&_pre]:my-2 [&_pre]:p-3 [&_pre]:bg-slate-100 [&_pre]:dark:bg-slate-800 [&_pre]:rounded-lg [&_strong]:font-semibold">
+												<ReactMarkdown>{plan || todo.plan || ""}</ReactMarkdown>
+											</div>
+										</div>
+										{!planExpanded && (plan || todo.plan || "").length > 300 && (
+											<div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white dark:from-slate-900 to-transparent pointer-events-none" />
+										)}
+									</div>
+									{(plan || todo.plan || "").length > 300 && (
+										<button
+											type="button"
+											onClick={() => setPlanExpanded(!planExpanded)}
+											className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
+										>
+											{planExpanded ? "Show less" : "See all"}
+										</button>
+									)}
+								</div>
+							)}
+						</div>
+					)}
+
+					{/* Linked Context (collapsible) */}
+					{showContext && (
+						<div className="mb-6 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+							<h3 className="text-sm font-medium mb-3 flex items-center gap-2">
+								<Link2 className="w-4 h-4 text-slate-500" />
+								Linked Context
+							</h3>
+							<ContextRefSelector
+								workspaceId={workspaceId}
+								todoId={todo._id}
+								todoTitle={title}
+								selectedRefs={contextRefs}
+								onRefsChange={setContextRefs}
+								compact={false}
+							/>
+
+							{/* Original Prompt */}
+							{todo.prompt && (
+								<div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+									<h4 className="text-xs font-medium text-slate-500 mb-2">Original Prompt</h4>
+									<p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">
+										{todo.prompt}
+									</p>
+								</div>
+							)}
+						</div>
+					)}
+
+					{/* Activity / Comments Section */}
+					<div>
+						<h2 className="text-sm font-medium mb-3 flex items-center gap-2">
+							<MessageSquare className="w-4 h-4 text-slate-500" />
+							Activity
+						</h2>
+						<TodoComments todoId={todo._id} />
+					</div>
+				</div>
+
+				{/* Footer Actions */}
+				<div className="flex items-center justify-between px-6 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+					<div className="flex items-center gap-2">
 						{/* Agent error */}
 						{agentError && (
-							<p className="text-xs text-red-600 dark:text-red-400 mt-2">
+							<p className="text-xs text-red-600 dark:text-red-400">
 								{agentError}
 							</p>
 						)}
 
-						{todo.agentPrompt && (
-							<div className="mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
-								<p className="text-xs font-medium text-slate-500 mb-1">
-									Agent Prompt:
-								</p>
-								<p className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap line-clamp-4">
-									{todo.agentPrompt}
-								</p>
-							</div>
+						{/* Integration status warning */}
+						{!hasRequiredIntegrations && !agentError && (
+							<p className="text-xs text-amber-600 dark:text-amber-400">
+								Configure integrations in Settings to use agents.
+							</p>
 						)}
 					</div>
-				</div>
 
-				{/* Actions */}
-				<div className="flex justify-between pt-4 border-t border-slate-200 dark:border-white/10 mt-4">
-					<div className="flex gap-2 flex-wrap">
+					<div className="flex items-center gap-2">
 						{!isAgentRunning && (
 							<>
 								<Button
 									variant="outline"
+									size="sm"
 									onClick={handleStartLocalAgent}
 									disabled={isGeneratingMcp || todo.agentType === "local"}
-									className="gap-2"
+									className="gap-1.5"
 								>
 									{isGeneratingMcp ? (
-										<>
-											<Loader2 className="w-4 h-4 animate-spin" />
-											Setting up...
-										</>
+										<Loader2 className="w-3.5 h-3.5 animate-spin" />
 									) : (
-										<>
-											<Terminal className="w-4 h-4" />
-											Local Agent
-										</>
+										<Terminal className="w-3.5 h-3.5" />
 									)}
+									Local Agent
 								</Button>
 								<Button
-									variant="default"
+									size="sm"
 									onClick={handleStartAgent}
-									disabled={
-										!hasRequiredIntegrations ||
-										isStartingAgent ||
-										todo.assignee === "agent"
-									}
-									className="gap-2 bg-purple-600 hover:bg-purple-700"
+									disabled={!hasRequiredIntegrations || isStartingAgent || todo.assignee === "agent"}
+									className="gap-1.5 bg-purple-600 hover:bg-purple-700"
 								>
 									{isStartingAgent ? (
-										<>
-											<Loader2 className="w-4 h-4 animate-spin" />
-											Starting...
-										</>
+										<Loader2 className="w-3.5 h-3.5 animate-spin" />
 									) : (
-										<>
-											<Bot className="w-4 h-4" />
-											Cursor Agent
-										</>
+										<Bot className="w-3.5 h-3.5" />
 									)}
+									Cursor Agent
 								</Button>
 							</>
 						)}
-					</div>
-					<div className="flex gap-2">
-						<Button variant="outline" onClick={() => onOpenChange(false)}>
+						<Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
 							{isAgentRunning ? "Close" : "Cancel"}
 						</Button>
-						{isEditable && <Button onClick={handleSave}>Save Changes</Button>}
+						{isEditable && (
+							<Button size="sm" onClick={handleSave}>
+								Save
+							</Button>
+						)}
 					</div>
 				</div>
 			</DialogContent>

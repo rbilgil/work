@@ -837,6 +837,7 @@ export const listSubTasks = query({
 			order: v.optional(v.number()),
 			userId: v.id("users"),
 			createdAt: v.number(),
+			completedAt: v.optional(v.number()),
 		}),
 	),
 	handler: async (ctx, args) => {
@@ -1285,16 +1286,18 @@ export const deleteSubTasksInternal = internalMutation({
 	},
 });
 
-// Update todo description and plan (for regeneration)
+// Update todo title, description and plan (for generation/regeneration)
 export const updateTodoContentInternal = internalMutation({
 	args: {
 		todoId: v.id("workspace_todos"),
+		title: v.optional(v.string()),
 		description: v.optional(v.string()),
 		plan: v.optional(v.string()),
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const updates: Record<string, unknown> = {};
+		if (args.title !== undefined) updates.title = args.title;
 		if (args.description !== undefined) updates.description = args.description;
 		if (args.plan !== undefined) {
 			updates.plan = args.plan;

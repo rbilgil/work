@@ -8,9 +8,7 @@ import { action, internalAction } from "./_generated/server";
 
 function selectModel() {
 	const modelName = process.env.AI_MODEL || "google/gemini-3-flash";
-	if (!process.env.GOOGLE_API_KEY) {
-		throw new Error("GOOGLE_API_KEY not configured");
-	}
+
 	return modelName;
 }
 
@@ -691,19 +689,13 @@ export const updateTodoFromGeneration = internalAction({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		await ctx.runMutation(api.workspaces.updateWorkspaceTodo, {
-			id: args.todoId,
+		// Use internal mutation to bypass auth check (we're already in a trusted internal action)
+		await ctx.runMutation(internal.workspaces.updateTodoContentInternal, {
+			todoId: args.todoId,
 			title: args.title,
 			description: args.description,
+			plan: args.plan,
 		});
-
-		// Update plan separately since updateWorkspaceTodo might not have the plan field yet
-		if (args.plan !== undefined) {
-			await ctx.runMutation(internal.workspaces.updateTodoPlanInternal, {
-				todoId: args.todoId,
-				plan: args.plan,
-			});
-		}
 
 		return null;
 	},
@@ -801,76 +793,15 @@ export const regenerateTicket = action({
 						.join("\n\n")
 				: "";
 
-			// 1. Regenerate title
-			console.log("\n[REGEN] Step 1: Regenerating title...");
-			const titlePrompt = `Generate a concise title for this task prompt:\n\n"${todo.prompt || todo.title}"`;
-			const titleStartTime = Date.now();
-			const { object: titleResult } = await generateObject({
-				model,
-				system: `You generate concise task titles (5-10 words) from user prompts.
-The title should be actionable and descriptive, like a good issue/ticket title.`,
-				prompt: titlePrompt,
-				schema: TitleSchema,
-				temperature: 0.3,
-			});
-			console.log(
-				"[REGEN] Title generated in",
-				Date.now() - titleStartTime,
-				"ms",
-			);
-			console.log("[REGEN] New title:", titleResult.title);
-
-			// 2. Regenerate description (fast LLM call)
-			console.log("\n[REGEN] Step 2: Regenerating description...");
-			const descPrompt = `Task title: "${titleResult.title}"
-${todo.prompt ? `Original prompt: "${todo.prompt}"` : ""}
-
-${linkedContext ? `Relevant context:\n${linkedContext}` : ""}
-
-Write a 2-3 line description for this task.`;
-			console.log(
-				"[REGEN] Description prompt length:",
-				descPrompt.length,
-				"chars",
-			);
-			const descStartTime = Date.now();
-			const { object: descResult } = await generateObject({
-				model,
-				system: `You write succinct task descriptions (2-3 lines max).
-Be direct and actionable. Avoid being wordy or verbose.
-Focus on what needs to be done, not extensive background.`,
-				prompt: descPrompt,
-				schema: DescriptionSchema,
-				temperature: 0.3,
-			});
-			console.log(
-				"[REGEN] Description generated in",
-				Date.now() - descStartTime,
-				"ms",
-			);
-			console.log(
-				"[REGEN] Description:",
-				descResult.description.slice(0, 100) + "...",
-			);
-
-			// 3. Update title and description immediately
-			console.log("\n[REGEN] Step 3: Saving title and description...");
-			await ctx.runMutation(api.workspaces.updateWorkspaceTodo, {
-				id: args.todoId,
-				title: titleResult.title,
-				description: descResult.description,
-			});
-			console.log("[REGEN] Title and description saved");
-
-			// 4. Delete existing sub-tasks before regenerating
-			console.log("\n[REGEN] Step 4: Deleting existing sub-tasks...");
+			// 1. Delete existing sub-tasks first
+			console.log("\n[REGEN] Step 1: Deleting existing sub-tasks...");
 			await ctx.runMutation(internal.workspaces.deleteSubTasksInternal, {
 				parentId: args.todoId,
 			});
 			console.log("[REGEN] Existing sub-tasks deleted");
 
-			// 5. Generate plan with OpenCode
-			console.log("\n[REGEN] Step 5: Generating plan with OpenCode...");
+			// 2. Generate plan with OpenCode
+			console.log("\n[REGEN] Step 2: Generating plan with OpenCode...");
 
 			// Set plan status to generating
 			await ctx.runMutation(
@@ -900,7 +831,10 @@ Focus on what needs to be done, not extensive background.`,
 				error: planResult.error,
 			});
 
+			let finalPlan: string | null = null;
+
 			if (planResult.success && planResult.plan) {
+				finalPlan = planResult.plan;
 				// Save the plan
 				console.log("[REGEN] Saving plan to database...");
 				await ctx.runMutation(
@@ -911,25 +845,104 @@ Focus on what needs to be done, not extensive background.`,
 					},
 				);
 				console.log("[REGEN] Plan saved");
-
-				// Generate sub-tasks from the plan
-				console.log("[REGEN] Generating sub-tasks...");
-				await ctx.runAction(internal.ticketAi.generateSubTasksFromPlan, {
-					todoId: args.todoId,
-					plan: planResult.plan,
-				});
-				console.log("[REGEN] Sub-tasks generated");
 			} else {
 				// OpenCode failed - fall back to LLM plan generation
 				console.warn(
 					"[REGEN] OpenCode failed, falling back to LLM:",
 					planResult.error,
 				);
-				await ctx.runAction(internal.ticketAi.generatePlanWithLLM, {
-					todoId: args.todoId,
-					workspaceId: todo.workspaceId as any,
+				// Generate a simple plan with LLM
+				const { object: llmPlanResult } = await generateObject({
+					model,
+					system: `You write clean, practical implementation plans for software tasks.
+Be direct and concise. Write like a senior engineer.`,
+					prompt: `Task: ${todo.title}
+Original prompt: ${todo.prompt || ""}
+${linkedContext ? `Context:\n${linkedContext}` : ""}
+
+Write a practical implementation plan.`,
+					schema: PlanSchema,
+					temperature: 0.4,
 				});
-				console.log("[REGEN] LLM fallback completed");
+				finalPlan = llmPlanResult.plan;
+				await ctx.runMutation(
+					internal.agentExecutionMutations.updateTodoWithPlan,
+					{
+						todoId: args.todoId,
+						plan: llmPlanResult.plan,
+					},
+				);
+				console.log("[REGEN] LLM fallback plan saved");
+			}
+
+			// 3. Generate title and description based on the plan
+			console.log("\n[REGEN] Step 3: Generating title from plan...");
+			const titlePrompt = `Based on this implementation plan, generate a concise title:
+
+Plan:
+${finalPlan?.slice(0, 1500) || ""}
+
+Original prompt: "${todo.prompt || todo.title}"`;
+			const titleStartTime = Date.now();
+			const { object: titleResult } = await generateObject({
+				model,
+				system: `You generate concise task titles (5-10 words) from implementation plans.
+The title should be actionable and descriptive, like a good issue/ticket title.`,
+				prompt: titlePrompt,
+				schema: TitleSchema,
+				temperature: 0.3,
+			});
+			console.log(
+				"[REGEN] Title generated in",
+				Date.now() - titleStartTime,
+				"ms",
+			);
+			console.log("[REGEN] New title:", titleResult.title);
+
+			// 4. Generate description based on plan
+			console.log("\n[REGEN] Step 4: Generating description from plan...");
+			const descPrompt = `Based on this implementation plan, write a 2-3 line description:
+
+Plan:
+${finalPlan?.slice(0, 1500) || ""}
+
+Original prompt: "${todo.prompt || ""}"`;
+			const descStartTime = Date.now();
+			const { object: descResult } = await generateObject({
+				model,
+				system: `You write succinct task descriptions (2-3 lines max).
+Be direct and actionable. Summarize what this task accomplishes.`,
+				prompt: descPrompt,
+				schema: DescriptionSchema,
+				temperature: 0.3,
+			});
+			console.log(
+				"[REGEN] Description generated in",
+				Date.now() - descStartTime,
+				"ms",
+			);
+			console.log(
+				"[REGEN] Description:",
+				descResult.description.slice(0, 100) + "...",
+			);
+
+			// 5. Save title and description
+			console.log("\n[REGEN] Step 5: Saving title and description...");
+			await ctx.runMutation(internal.workspaces.updateTodoContentInternal, {
+				todoId: args.todoId,
+				title: titleResult.title,
+				description: descResult.description,
+			});
+			console.log("[REGEN] Title and description saved");
+
+			// 6. Generate sub-tasks from the plan
+			if (finalPlan) {
+				console.log("\n[REGEN] Step 6: Generating sub-tasks...");
+				await ctx.runAction(internal.ticketAi.generateSubTasksFromPlan, {
+					todoId: args.todoId,
+					plan: finalPlan,
+				});
+				console.log("[REGEN] Sub-tasks generated");
 			}
 
 			const totalTime = Date.now() - startTime;
