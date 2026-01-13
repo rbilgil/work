@@ -534,6 +534,7 @@ export const getFullContextForAgent = internalQuery({
 				title: todo.title,
 				description: todo.description,
 				agentPrompt: todo.agentPrompt,
+				plan: todo.plan, // Include the implementation plan if one exists
 			},
 			workspace: {
 				name: workspace.name,

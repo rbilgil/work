@@ -169,13 +169,39 @@ export const updateAgentRunStatus = internalMutation({
 
 		await ctx.db.patch(args.agentRunId, updates);
 
-		// If finished with PR, update todo to in_review
-		if (args.status === "finished" && args.prUrl) {
+		// When agent finishes or fails, update the todo
+		if (args.status === "finished" || args.status === "failed") {
 			const agentRun = await ctx.db.get(args.agentRunId);
 			if (agentRun) {
-				await ctx.db.patch(agentRun.todoId, {
-					status: "in_review",
-				});
+				const todoUpdates: Record<string, unknown> = {
+					// Clear assignee so task is removed from "Agents" list
+					assignee: undefined,
+				};
+
+				// If finished with PR, move to in_review
+				if (args.status === "finished" && args.prUrl) {
+					todoUpdates.status = "in_review";
+				}
+
+				await ctx.db.patch(agentRun.todoId, todoUpdates);
+
+				// If agent finished successfully, mark all subtasks as done
+				if (args.status === "finished") {
+					const subtasks = await ctx.db
+						.query("workspace_todos")
+						.withIndex("by_parent", (q) => q.eq("parentId", agentRun.todoId))
+						.collect();
+
+					const now = Date.now();
+					for (const subtask of subtasks) {
+						if (subtask.status !== "done") {
+							await ctx.db.patch(subtask._id, {
+								status: "done",
+								completedAt: now,
+							});
+						}
+					}
+				}
 			}
 		}
 	},
@@ -277,6 +303,7 @@ export const getAgentRunForTodo = query({
 				v.literal("finished"),
 				v.literal("failed"),
 			),
+			externalAgentId: v.optional(v.string()),
 			prUrl: v.optional(v.string()),
 			prNumber: v.optional(v.number()),
 			prStatus: v.optional(
@@ -307,6 +334,7 @@ export const getAgentRunForTodo = query({
 		return {
 			_id: agentRun._id,
 			status: agentRun.status,
+			externalAgentId: agentRun.externalAgentId,
 			prUrl: agentRun.prUrl,
 			prNumber: agentRun.prNumber,
 			prStatus: agentRun.prStatus,

@@ -429,6 +429,7 @@ function buildAgentPrompt(contextData: {
 		title: string;
 		description?: string;
 		agentPrompt?: string;
+		plan?: string;
 	};
 	workspace: {
 		name: string;
@@ -448,8 +449,17 @@ function buildAgentPrompt(contextData: {
 		sections.push(`## Description\n${contextData.todo.description}`);
 	}
 
+	// Include the implementation plan prominently if one exists
+	if (contextData.todo.plan) {
+		sections.push(`## Implementation Plan
+
+**IMPORTANT: Follow this plan carefully. It was created by analyzing the actual codebase.**
+
+${contextData.todo.plan}`);
+	}
+
 	if (contextData.todo.agentPrompt) {
-		sections.push(`## Agent Instructions\n${contextData.todo.agentPrompt}`);
+		sections.push(`## Additional Instructions\n${contextData.todo.agentPrompt}`);
 	}
 
 	sections.push(
@@ -475,7 +485,7 @@ function buildAgentPrompt(contextData: {
 
 	sections.push(`
 ## Instructions
-Please implement this task following best practices:
+Please implement this task following the plan above (if provided). Follow best practices:
 1. Write clean, well-documented code
 2. Include appropriate tests if applicable
 3. Follow the existing code style and patterns in the repository

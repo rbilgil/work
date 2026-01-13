@@ -1,7 +1,7 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
-import { Bot, CheckCircle2, Circle, ListTodo, MessageSquare, RefreshCw, User, Loader2, Terminal, Copy, Check, MoreHorizontal, Link2, FileText, Plus } from "lucide-react";
+import { Bot, CheckCircle2, Circle, ListTodo, MessageSquare, RefreshCw, User, Loader2, Terminal, Copy, Check, MoreHorizontal, Link2, FileText, Plus, UserX } from "lucide-react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
@@ -105,6 +105,11 @@ export default function TaskDetailModal({
 	// Query for sub-tasks
 	const subTasks = useQuery(api.workspaces.listSubTasks, {
 		parentId: todo._id,
+	});
+
+	// Query for agent run status (to know if agent is actively running)
+	const agentRun = useQuery(api.agentExecutionMutations.getAgentRunForTodo, {
+		todoId: todo._id,
 	});
 
 	const hasRequiredIntegrations = integrationStatus?.ready ?? false;
@@ -263,12 +268,22 @@ export default function TaskDetailModal({
 		}
 	};
 
-	const isAgentRunning =
+	// Agent is actively running if status is "creating" or "running"
+	const isAgentActivelyRunning =
 		todo.assignee === "agent" &&
-		todo.status === "in_progress" &&
-		todo.currentAgentRunId;
+		todo.currentAgentRunId &&
+		agentRun &&
+		(agentRun.status === "creating" || agentRun.status === "running");
 
-	const isEditable = !isAgentRunning;
+	// Allow editing when agent is not actively running (even if assigned)
+	const isEditable = !isAgentActivelyRunning;
+
+	const handleUnassignAgent = async () => {
+		await updateTodo({
+			id: todo._id,
+			clearAssignee: true,
+		});
+	};
 
 	// Status badge colors
 	const statusConfig: Record<Status, { label: string; color: string }> = {
@@ -348,6 +363,12 @@ export default function TaskDetailModal({
 									<DropdownMenuItem onClick={() => {}}>
 										<FileText className="w-4 h-4 mr-2" />
 										View Original Prompt
+									</DropdownMenuItem>
+								)}
+								{todo.assignee === "agent" && !isAgentActivelyRunning && (
+									<DropdownMenuItem onClick={handleUnassignAgent}>
+										<UserX className="w-4 h-4 mr-2" />
+										Unassign Agent
 									</DropdownMenuItem>
 								)}
 								<DropdownMenuSeparator />
@@ -584,7 +605,7 @@ export default function TaskDetailModal({
 					</div>
 
 					<div className="flex items-center gap-2">
-						{!isAgentRunning && (
+						{!isAgentActivelyRunning && (
 							<>
 								<Button
 									variant="outline"
@@ -616,7 +637,7 @@ export default function TaskDetailModal({
 							</>
 						)}
 						<Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-							{isAgentRunning ? "Close" : "Cancel"}
+							{isAgentActivelyRunning ? "Close" : "Cancel"}
 						</Button>
 						{isEditable && (
 							<Button size="sm" onClick={handleSave}>

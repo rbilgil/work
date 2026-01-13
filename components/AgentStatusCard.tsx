@@ -7,6 +7,7 @@ import { Id } from "../convex/_generated/dataModel";
 import {
 	AlertCircle,
 	CheckCircle2,
+	Eye,
 	ExternalLink,
 	GitPullRequest,
 	Loader2,
@@ -164,6 +165,20 @@ export default function AgentStatusCard({ todoId, onRetry }: AgentStatusCardProp
 					<AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
 					<span>{agentRun.errorMessage}</span>
 				</div>
+			)}
+
+			{/* See Progress link - show when agent is active */}
+			{agentRun.externalAgentId && (agentRun.status === "creating" || agentRun.status === "running") && (
+				<a
+					href={`https://cursor.com/agents/${agentRun.externalAgentId}`}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 mb-3"
+				>
+					<Eye className="w-4 h-4" />
+					See Progress
+					<ExternalLink className="w-3 h-3" />
+				</a>
 			)}
 
 			{/* PR link */}

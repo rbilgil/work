@@ -880,6 +880,7 @@ export const updateWorkspaceTodo = mutation({
 		title: v.optional(v.string()),
 		description: v.optional(v.string()),
 		status: v.optional(workspaceTodoStatus),
+		clearAssignee: v.optional(v.boolean()), // Set to true to clear the assignee
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
@@ -907,6 +908,10 @@ export const updateWorkspaceTodo = mutation({
 			if (args.status !== "done" && todo.status === "done") {
 				update.completedAt = undefined;
 			}
+		}
+		if (args.clearAssignee) {
+			update.assignee = undefined;
+			update.agentType = undefined;
 		}
 
 		await ctx.db.patch(args.id, update);

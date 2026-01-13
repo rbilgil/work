@@ -235,7 +235,7 @@ export const generatePlanWithOpenCode = internalAction({
 			const opencodeConfig = {
 				mode: {
 					plan: {
-						model: "gemini-3-flash",
+						model: "gemini-3-flash-preview",
 						tools: {
 							// Disable write operations
 							write: false,
@@ -352,7 +352,7 @@ export const generatePlanWithOpenCode = internalAction({
 				// Specify the model from our config
 				model: {
 					providerID: "google",
-					modelID: "gemini-3-flash", // Use a model that exists
+					modelID: "gemini-3-flash-preview",
 				},
 				parts: [{ type: "text", text: planningPrompt }],
 			});
@@ -366,7 +366,7 @@ export const generatePlanWithOpenCode = internalAction({
 			);
 			const messageResult = await sandbox.commands.run(
 				`curl -s -X POST http://localhost:${serverPort}/session/${sessionId}/message -H "Content-Type: application/json" -d @/tmp/message.json`,
-				// No timeout - let it run as long as needed
+				{ timeoutMs: 0 }, // 0 = no timeout, let it run as long as needed
 			);
 
 			console.log(
