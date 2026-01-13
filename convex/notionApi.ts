@@ -599,7 +599,7 @@ export const fetchAndCreateNotionDoc = internalAction({
 		userId: v.id("users"),
 	},
 	returns: v.union(v.id("workspace_docs"), v.null()),
-	handler: async (ctx, args) => {
+	handler: async (ctx, args): Promise<Id<"workspace_docs"> | null> => {
 		// Get Notion API token
 		const notionToken = await ctx.runQuery(
 			internal.integrations.getDecryptedNotionToken,
@@ -616,7 +616,13 @@ export const fetchAndCreateNotionDoc = internalAction({
 			const doc = await fetchNotionDocument(notionToken, args.notionUrl);
 
 			// Check if doc with this URL already exists
-			const existingDoc = await ctx.runQuery(
+			const existingDoc: {
+				_id: Id<"workspace_docs">;
+				title: string;
+				content: string;
+				sourceUrl?: string;
+				sourceType?: "notion" | "manual";
+			} | null = await ctx.runQuery(
 				internal.notionApiInternal.getDocBySourceUrl,
 				{
 					workspaceId: args.workspaceId,
@@ -635,13 +641,16 @@ export const fetchAndCreateNotionDoc = internalAction({
 			}
 
 			// Create new doc
-			const docId = await ctx.runMutation(internal.notionApiInternal.createNotionDoc, {
-				workspaceId: args.workspaceId,
-				title: doc.title,
-				content: doc.content,
-				sourceUrl: args.notionUrl,
-				userId: args.userId,
-			});
+			const docId: Id<"workspace_docs"> = await ctx.runMutation(
+				internal.notionApiInternal.createNotionDoc,
+				{
+					workspaceId: args.workspaceId,
+					title: doc.title,
+					content: doc.content,
+					sourceUrl: args.notionUrl,
+					userId: args.userId,
+				},
+			);
 
 			return docId;
 		} catch (error) {

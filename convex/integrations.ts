@@ -304,17 +304,20 @@ export const completeGitHubOAuth = internalMutation({
 	},
 });
 
+// ============ NOTION OAUTH STATE MANAGEMENT ============
+
 /**
- * Save Notion API token for an organization
- * Users need to create an internal integration at https://www.notion.so/my-integrations
- * and share the pages they want to access with the integration
+ * Initiate Notion OAuth flow for an organization - creates state for CSRF protection
+ * Returns the OAuth URL with state parameter
  */
-export const saveNotionApiToken = mutation({
+export const initiateNotionOAuth = mutation({
 	args: {
 		organizationId: v.id("organizations"),
-		apiToken: v.string(),
 	},
-	returns: v.boolean(),
+	returns: v.object({
+		authUrl: v.string(),
+		state: v.string(),
+	}),
 	handler: async (ctx, args) => {
 		const user = await requireAuthUser(ctx);
 
@@ -322,6 +325,12 @@ export const saveNotionApiToken = mutation({
 		if (!(await verifyOrgMembership(ctx, args.organizationId, user._id))) {
 			throw new Error("Organization not found or access denied");
 		}
+
+		// Generate a random state value
+		const stateBytes = crypto.getRandomValues(new Uint8Array(32));
+		const state = Array.from(stateBytes)
+			.map((b) => b.toString(16).padStart(2, "0"))
+			.join("");
 
 		// Check if integration already exists
 		const existing = await ctx.db
@@ -331,25 +340,120 @@ export const saveNotionApiToken = mutation({
 			)
 			.unique();
 
-		// Encrypt the API token
-		const encryptedAccessToken = await encryptString(args.apiToken);
+		const oauthStateExpiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
 		if (existing) {
+			// Update existing integration with new OAuth state
 			await ctx.db.patch(existing._id, {
-				encryptedAccessToken,
+				oauthState: state,
+				oauthStateExpiresAt,
 				updatedAt: Date.now(),
 			});
 		} else {
+			// Create a new pending integration with OAuth state
 			await ctx.db.insert("organization_integrations", {
 				organizationId: args.organizationId,
 				type: "notion",
-				encryptedAccessToken,
+				oauthState: state,
+				oauthStateExpiresAt,
 				createdByUserId: user._id,
 				createdAt: Date.now(),
 			});
 		}
 
-		return true;
+		// Build the OAuth URL
+		const clientId = process.env.NOTION_CLIENT_ID;
+		if (!clientId) {
+			throw new Error("Notion OAuth not configured");
+		}
+
+		const convexUrl = process.env.CONVEX_SITE_URL;
+		if (!convexUrl) {
+			throw new Error("CONVEX_SITE_URL not configured");
+		}
+
+		const redirectUri = `${convexUrl}/auth/notion/callback`;
+
+		const authUrl = new URL("https://api.notion.com/v1/oauth/authorize");
+		authUrl.searchParams.set("client_id", clientId);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("owner", "user");
+		authUrl.searchParams.set("state", state);
+
+		return {
+			authUrl: authUrl.toString(),
+			state,
+		};
+	},
+});
+
+/**
+ * Complete Notion OAuth flow - verifies state and saves tokens
+ * Called internally from the HTTP callback handler
+ */
+export const completeNotionOAuth = internalMutation({
+	args: {
+		state: v.string(),
+		accessToken: v.string(),
+		workspaceId: v.optional(v.string()),
+		workspaceName: v.optional(v.string()),
+		workspaceIcon: v.optional(v.string()),
+		botId: v.optional(v.string()),
+	},
+	returns: v.object({
+		success: v.boolean(),
+		error: v.optional(v.string()),
+	}),
+	handler: async (ctx, args) => {
+		// Find the integration by OAuth state
+		const integration = await ctx.db
+			.query("organization_integrations")
+			.withIndex("by_oauth_state", (q) => q.eq("oauthState", args.state))
+			.unique();
+
+		if (!integration) {
+			return { success: false, error: "Invalid or expired state" };
+		}
+
+		// Check if state has expired
+		if (
+			integration.oauthStateExpiresAt &&
+			Date.now() > integration.oauthStateExpiresAt
+		) {
+			// Clear the expired state
+			await ctx.db.patch(integration._id, {
+				oauthState: undefined,
+				oauthStateExpiresAt: undefined,
+			});
+			return { success: false, error: "OAuth state expired" };
+		}
+
+		// Encrypt the access token
+		const encryptedAccessToken = await encryptString(args.accessToken);
+
+		// Store workspace info in config
+		const config: Record<string, string> = {};
+		if (args.workspaceId) config.workspaceId = args.workspaceId;
+		if (args.workspaceName) config.workspaceName = args.workspaceName;
+		if (args.workspaceIcon) config.workspaceIcon = args.workspaceIcon;
+		if (args.botId) config.botId = args.botId;
+
+		const encryptedConfig =
+			Object.keys(config).length > 0
+				? await encryptString(JSON.stringify(config))
+				: undefined;
+
+		// Update integration with token and clear the OAuth state
+		await ctx.db.patch(integration._id, {
+			encryptedAccessToken,
+			encryptedConfig,
+			oauthState: undefined,
+			oauthStateExpiresAt: undefined,
+			updatedAt: Date.now(),
+		});
+
+		return { success: true };
 	},
 });
 

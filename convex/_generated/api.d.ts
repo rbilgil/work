@@ -14,6 +14,8 @@ import type * as auth from "../auth.js";
 import type * as http from "../http.js";
 import type * as integrations from "../integrations.js";
 import type * as mcp from "../mcp.js";
+import type * as notionApi from "../notionApi.js";
+import type * as notionApiInternal from "../notionApiInternal.js";
 import type * as opencodePlanning from "../opencodePlanning.js";
 import type * as organizations from "../organizations.js";
 import type * as ticketAi from "../ticketAi.js";
@@ -37,6 +39,8 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   integrations: typeof integrations;
   mcp: typeof mcp;
+  notionApi: typeof notionApi;
+  notionApiInternal: typeof notionApiInternal;
   opencodePlanning: typeof opencodePlanning;
   organizations: typeof organizations;
   ticketAi: typeof ticketAi;

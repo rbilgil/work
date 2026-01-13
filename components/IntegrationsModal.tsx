@@ -12,6 +12,7 @@ import {
 	Unlink,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import RepoSelector from "@/components/RepoSelector";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -22,7 +23,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import RepoSelector from "@/components/RepoSelector";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 
@@ -41,8 +41,6 @@ export default function IntegrationsModal({
 }: IntegrationsModalProps) {
 	const [cursorApiKey, setCursorApiKey] = useState("");
 	const [savingCursor, setSavingCursor] = useState(false);
-	const [notionApiToken, setNotionApiToken] = useState("");
-	const [savingNotion, setSavingNotion] = useState(false);
 	const [selectedRepo, setSelectedRepo] = useState<{
 		owner: string;
 		name: string;
@@ -62,27 +60,34 @@ export default function IntegrationsModal({
 	);
 
 	const saveCursorApiKey = useMutation(api.integrations.saveCursorApiKey);
-	const saveNotionApiToken = useMutation(api.integrations.saveNotionApiToken);
 	const removeIntegration = useMutation(api.integrations.removeIntegration);
 	const connectRepo = useMutation(api.integrations.connectRepoToWorkspace);
 	const disconnectRepo = useMutation(api.integrations.disconnectRepo);
 	const initiateGitHubOAuth = useMutation(api.integrations.initiateGitHubOAuth);
+	const initiateNotionOAuth = useMutation(api.integrations.initiateNotionOAuth);
 
-	// Handle GitHub OAuth callback (success/error messages only - tokens are stored server-side)
+	// Handle OAuth callbacks (success/error messages only - tokens are stored server-side)
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
 		const githubConnected = params.get("github_connected");
 		const githubError = params.get("github_error");
+		const notionConnected = params.get("notion_connected");
+		const notionError = params.get("notion_error");
 
-		if (githubConnected === "true" || githubError) {
+		if (githubConnected === "true" || githubError || notionConnected === "true" || notionError) {
 			// Clean up URL params
 			const newUrl = new URL(window.location.href);
 			newUrl.searchParams.delete("github_connected");
 			newUrl.searchParams.delete("github_error");
+			newUrl.searchParams.delete("notion_connected");
+			newUrl.searchParams.delete("notion_error");
 			window.history.replaceState({}, "", newUrl.toString());
 
 			if (githubError) {
 				alert(`GitHub connection failed: ${githubError}`);
+			}
+			if (notionError) {
+				alert(`Notion connection failed: ${notionError}`);
 			}
 		}
 	}, []);
@@ -114,18 +119,19 @@ export default function IntegrationsModal({
 		await removeIntegration({ organizationId, type: "cursor" });
 	};
 
-	const handleSaveNotionToken = async () => {
-		if (!organizationId || !notionApiToken.trim()) return;
-		setSavingNotion(true);
+	const handleConnectNotion = async () => {
+		if (!organizationId) return;
 		try {
-			await saveNotionApiToken({ organizationId, apiToken: notionApiToken.trim() });
-			setNotionApiToken("");
-		} finally {
-			setSavingNotion(false);
+			// Initiate OAuth flow via mutation - this creates a state in the DB for CSRF protection
+			const { authUrl } = await initiateNotionOAuth({ organizationId });
+			window.location.href = authUrl;
+		} catch (error) {
+			console.error("Failed to initiate Notion OAuth:", error);
+			alert("Failed to initiate Notion connection. Please try again.");
 		}
 	};
 
-	const handleRemoveNotion = async () => {
+	const handleDisconnectNotion = async () => {
 		if (!organizationId) return;
 		await removeIntegration({ organizationId, type: "notion" });
 	};
@@ -256,7 +262,7 @@ export default function IntegrationsModal({
 							<div className="flex items-center gap-2">
 								<FileText className="w-5 h-5 text-slate-700" />
 								<h3 className="font-medium">Notion</h3>
-								{integrations?.notion.connected && (
+								{integrations?.notion?.connected && (
 									<span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full">
 										<Check className="w-3 h-3" /> Connected
 									</span>
@@ -266,52 +272,28 @@ export default function IntegrationsModal({
 								Connect Notion to automatically fetch document content when
 								sharing Notion links.
 							</p>
-							{integrations?.notion.connected ? (
+							{integrations?.notion?.connected ? (
 								<div className="flex items-center gap-2">
 									<span className="text-sm text-slate-500">
-										Integration token saved
+										Notion workspace connected
 									</span>
 									<Button
 										variant="outline"
 										size="sm"
-										onClick={handleRemoveNotion}
+										onClick={handleDisconnectNotion}
 									>
 										<Unlink className="w-4 h-4 mr-1" />
 										Disconnect
 									</Button>
 								</div>
 							) : (
-								<div className="flex gap-2">
-									<Input
-										type="password"
-										value={notionApiToken}
-										onChange={(e) => setNotionApiToken(e.target.value)}
-										placeholder="Enter your Notion integration token"
-										className="flex-1"
-									/>
-									<Button
-										onClick={handleSaveNotionToken}
-										disabled={!notionApiToken.trim() || savingNotion}
-									>
-										{savingNotion ? (
-											<Loader2 className="w-4 h-4 animate-spin" />
-										) : (
-											"Save"
-										)}
-									</Button>
-								</div>
+								<Button onClick={handleConnectNotion} variant="outline">
+									<FileText className="w-4 h-4 mr-2" />
+									Connect Notion
+								</Button>
 							)}
-							<a
-								href="https://www.notion.so/my-integrations"
-								target="_blank"
-								rel="noopener noreferrer"
-								className="text-sm text-blue-500 hover:underline flex items-center gap-1"
-							>
-								Create a Notion integration
-								<ExternalLink className="w-3 h-3" />
-							</a>
 							<p className="text-xs text-slate-400">
-								After creating an integration, share your Notion pages with it
+								After connecting, share your Notion pages with the integration
 								to enable content fetching.
 							</p>
 						</div>

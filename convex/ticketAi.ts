@@ -4,6 +4,7 @@ import { generateObject } from "ai";
 import { v } from "convex/values";
 import { z } from "zod";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { action, internalAction } from "./_generated/server";
 
 function selectModel() {
@@ -360,8 +361,8 @@ Focus on what needs to be done, not extensive background.`,
 			}
 
 			// 6. Generate implementation plan using OpenCode in E2B sandbox
-			console.log("\n[TICKET-GEN] Step 6: Generating plan with OpenCode...");
-			const opencodeStartTime = Date.now();
+			// Schedule as independent action to avoid timeout issues
+			console.log("\n[TICKET-GEN] Step 6: Scheduling plan generation with OpenCode...");
 
 			// Set plan status to generating
 			await ctx.runMutation(
@@ -372,58 +373,17 @@ Focus on what needs to be done, not extensive background.`,
 				},
 			);
 
-			const planResult = await ctx.runAction(
+			// Schedule OpenCode planning as independent action (saveToDb=true handles saving and fallback)
+			await ctx.scheduler.runAfter(
+				0,
 				internal.opencodePlanning.generatePlanWithOpenCode,
 				{
 					todoId: args.todoId,
 					workspaceId: args.workspaceId,
+					saveToDb: true,
 				},
 			);
-			console.log(
-				"[TICKET-GEN] OpenCode call returned in",
-				Date.now() - opencodeStartTime,
-				"ms",
-			);
-			console.log("[TICKET-GEN] OpenCode result:", {
-				success: planResult.success,
-				planLength: planResult.plan?.length,
-				error: planResult.error,
-			});
-
-			if (planResult.success && planResult.plan) {
-				// Save the plan
-				console.log("[TICKET-GEN] Saving plan to database...");
-				await ctx.runMutation(
-					internal.agentExecutionMutations.updateTodoWithPlan,
-					{
-						todoId: args.todoId,
-						plan: planResult.plan,
-					},
-				);
-				console.log("[TICKET-GEN] Plan saved");
-
-				// Generate sub-tasks from the plan
-				console.log("[TICKET-GEN] Generating sub-tasks...");
-				await ctx.runAction(internal.ticketAi.generateSubTasksFromPlan, {
-					todoId: args.todoId,
-					plan: planResult.plan,
-				});
-				console.log("[TICKET-GEN] Sub-tasks generated");
-			} else {
-				// OpenCode failed - fall back to LLM plan generation
-				console.warn(
-					"[TICKET-GEN] OpenCode failed, falling back to LLM:",
-					planResult.error,
-				);
-				console.log(
-					"[TICKET-GEN] Starting LLM fallback for plan generation...",
-				);
-				await ctx.runAction(internal.ticketAi.generatePlanWithLLM, {
-					todoId: args.todoId,
-					workspaceId: args.workspaceId,
-				});
-				console.log("[TICKET-GEN] LLM fallback completed");
-			}
+			console.log("[TICKET-GEN] OpenCode planning scheduled (will run independently)");
 
 			const totalTime = Date.now() - startTime;
 			console.log("\n" + "=".repeat(60));
@@ -734,8 +694,6 @@ export const regenerateTicket = action({
 		console.log("[REGEN] User authenticated:", identity.subject);
 
 		try {
-			const model = selectModel();
-
 			// Get the todo
 			console.log("[REGEN] Fetching todo...");
 			const todo = (await ctx.runQuery(internal.workspaces.getTodoInternal, {
@@ -754,45 +712,6 @@ export const regenerateTicket = action({
 			console.log("[REGEN] Todo found:", todo.title);
 			console.log("[REGEN] Workspace ID:", todo.workspaceId);
 
-			// Get workspace info
-			console.log("[REGEN] Fetching workspace...");
-			const workspace = (await ctx.runQuery(
-				internal.workspaces.getWorkspaceInternal,
-				{
-					id: todo.workspaceId as any,
-				},
-			)) as { name: string; description?: string } | null;
-			console.log("[REGEN] Workspace:", workspace?.name || "Unknown");
-
-			// Fetch full context content
-			console.log("[REGEN] Fetching context...");
-			const fullContext = (await ctx.runQuery(
-				internal.todoContext.getFullContextForAgent,
-				{
-					todoId: args.todoId,
-				},
-			)) as {
-				context: { docs: string; messages: string; links: string };
-			} | null;
-			console.log("[REGEN] Context fetched:", {
-				hasDocs: !!fullContext?.context.docs,
-				hasMessages: !!fullContext?.context.messages,
-				hasLinks: !!fullContext?.context.links,
-			});
-
-			const linkedContext: string = fullContext
-				? [
-						fullContext.context.docs &&
-							`**Documentation:**\n${fullContext.context.docs}`,
-						fullContext.context.messages &&
-							`**Conversations:**\n${fullContext.context.messages}`,
-						fullContext.context.links &&
-							`**Links:**\n${fullContext.context.links}`,
-					]
-						.filter(Boolean)
-						.join("\n\n")
-				: "";
-
 			// 1. Delete existing sub-tasks first
 			console.log("\n[REGEN] Step 1: Deleting existing sub-tasks...");
 			await ctx.runMutation(internal.workspaces.deleteSubTasksInternal, {
@@ -800,8 +719,8 @@ export const regenerateTicket = action({
 			});
 			console.log("[REGEN] Existing sub-tasks deleted");
 
-			// 2. Generate plan with OpenCode
-			console.log("\n[REGEN] Step 2: Generating plan with OpenCode...");
+			// 2. Schedule plan generation with OpenCode (runs independently to avoid timeout)
+			console.log("\n[REGEN] Step 2: Scheduling plan generation with OpenCode...");
 
 			// Set plan status to generating
 			await ctx.runMutation(
@@ -812,142 +731,24 @@ export const regenerateTicket = action({
 				},
 			);
 
-			const opencodeStartTime = Date.now();
-			const planResult = await ctx.runAction(
+			// Schedule OpenCode planning as independent action
+			// saveToDb=true + mode="regenerate" will save plan and then generate title, desc, subtasks
+			await ctx.scheduler.runAfter(
+				0,
 				internal.opencodePlanning.generatePlanWithOpenCode,
 				{
 					todoId: args.todoId,
-					workspaceId: todo.workspaceId as any,
+					workspaceId: todo.workspaceId as Id<"workspaces">,
+					saveToDb: true,
+					mode: "regenerate",
 				},
 			);
-			console.log(
-				"[REGEN] OpenCode call returned in",
-				Date.now() - opencodeStartTime,
-				"ms",
-			);
-			console.log("[REGEN] OpenCode result:", {
-				success: planResult.success,
-				planLength: planResult.plan?.length,
-				error: planResult.error,
-			});
-
-			let finalPlan: string | null = null;
-
-			if (planResult.success && planResult.plan) {
-				finalPlan = planResult.plan;
-				// Save the plan
-				console.log("[REGEN] Saving plan to database...");
-				await ctx.runMutation(
-					internal.agentExecutionMutations.updateTodoWithPlan,
-					{
-						todoId: args.todoId,
-						plan: planResult.plan,
-					},
-				);
-				console.log("[REGEN] Plan saved");
-			} else {
-				// OpenCode failed - fall back to LLM plan generation
-				console.warn(
-					"[REGEN] OpenCode failed, falling back to LLM:",
-					planResult.error,
-				);
-				// Generate a simple plan with LLM
-				const { object: llmPlanResult } = await generateObject({
-					model,
-					system: `You write clean, practical implementation plans for software tasks.
-Be direct and concise. Write like a senior engineer.`,
-					prompt: `Task: ${todo.title}
-Original prompt: ${todo.prompt || ""}
-${linkedContext ? `Context:\n${linkedContext}` : ""}
-
-Write a practical implementation plan.`,
-					schema: PlanSchema,
-					temperature: 0.4,
-				});
-				finalPlan = llmPlanResult.plan;
-				await ctx.runMutation(
-					internal.agentExecutionMutations.updateTodoWithPlan,
-					{
-						todoId: args.todoId,
-						plan: llmPlanResult.plan,
-					},
-				);
-				console.log("[REGEN] LLM fallback plan saved");
-			}
-
-			// 3. Generate title and description based on the plan
-			console.log("\n[REGEN] Step 3: Generating title from plan...");
-			const titlePrompt = `Based on this implementation plan, generate a concise title:
-
-Plan:
-${finalPlan?.slice(0, 1500) || ""}
-
-Original prompt: "${todo.prompt || todo.title}"`;
-			const titleStartTime = Date.now();
-			const { object: titleResult } = await generateObject({
-				model,
-				system: `You generate concise task titles (5-10 words) from implementation plans.
-The title should be actionable and descriptive, like a good issue/ticket title.`,
-				prompt: titlePrompt,
-				schema: TitleSchema,
-				temperature: 0.3,
-			});
-			console.log(
-				"[REGEN] Title generated in",
-				Date.now() - titleStartTime,
-				"ms",
-			);
-			console.log("[REGEN] New title:", titleResult.title);
-
-			// 4. Generate description based on plan
-			console.log("\n[REGEN] Step 4: Generating description from plan...");
-			const descPrompt = `Based on this implementation plan, write a 2-3 line description:
-
-Plan:
-${finalPlan?.slice(0, 1500) || ""}
-
-Original prompt: "${todo.prompt || ""}"`;
-			const descStartTime = Date.now();
-			const { object: descResult } = await generateObject({
-				model,
-				system: `You write succinct task descriptions (2-3 lines max).
-Be direct and actionable. Summarize what this task accomplishes.`,
-				prompt: descPrompt,
-				schema: DescriptionSchema,
-				temperature: 0.3,
-			});
-			console.log(
-				"[REGEN] Description generated in",
-				Date.now() - descStartTime,
-				"ms",
-			);
-			console.log(
-				"[REGEN] Description:",
-				descResult.description.slice(0, 100) + "...",
-			);
-
-			// 5. Save title and description
-			console.log("\n[REGEN] Step 5: Saving title and description...");
-			await ctx.runMutation(internal.workspaces.updateTodoContentInternal, {
-				todoId: args.todoId,
-				title: titleResult.title,
-				description: descResult.description,
-			});
-			console.log("[REGEN] Title and description saved");
-
-			// 6. Generate sub-tasks from the plan
-			if (finalPlan) {
-				console.log("\n[REGEN] Step 6: Generating sub-tasks...");
-				await ctx.runAction(internal.ticketAi.generateSubTasksFromPlan, {
-					todoId: args.todoId,
-					plan: finalPlan,
-				});
-				console.log("[REGEN] Sub-tasks generated");
-			}
+			console.log("[REGEN] OpenCode planning scheduled (will run independently)");
 
 			const totalTime = Date.now() - startTime;
 			console.log("\n" + "=".repeat(60));
-			console.log("[REGEN] Regeneration complete in", totalTime, "ms");
+			console.log("[REGEN] Regeneration initiated in", totalTime, "ms");
+			console.log("[REGEN] Plan generation, title/description, and sub-tasks will complete in background");
 			console.log("=".repeat(60) + "\n");
 
 			return { success: true };
@@ -957,6 +758,96 @@ Be direct and actionable. Summarize what this task accomplishes.`,
 				success: false,
 				error: error instanceof Error ? error.message : "Unknown error",
 			};
+		}
+	},
+});
+
+/**
+ * Complete regeneration after plan is generated (generates title, description, subtasks)
+ * Called by OpenCode planning action when saveToDb=true and mode="regenerate"
+ */
+export const completeRegeneration = internalAction({
+	args: {
+		todoId: v.id("workspace_todos"),
+		plan: v.string(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args): Promise<null> => {
+		console.log("\n" + "-".repeat(50));
+		console.log("[REGEN-COMPLETE] Completing regeneration with plan");
+		console.log("[REGEN-COMPLETE] Todo ID:", args.todoId);
+		console.log("[REGEN-COMPLETE] Plan length:", args.plan.length, "chars");
+		console.log("-".repeat(50));
+
+		try {
+			const model = selectModel();
+
+			// Get the todo
+			const todo = (await ctx.runQuery(internal.workspaces.getTodoInternal, {
+				id: args.todoId,
+			})) as {
+				title: string;
+				prompt?: string;
+			} | null;
+			if (!todo) {
+				console.error("[REGEN-COMPLETE] Todo not found");
+				return null;
+			}
+
+			// Generate title from plan
+			console.log("[REGEN-COMPLETE] Generating title...");
+			const { object: titleResult } = await generateObject({
+				model,
+				system: `You generate concise task titles (5-10 words) from implementation plans.
+The title should be actionable and descriptive, like a good issue/ticket title.`,
+				prompt: `Based on this implementation plan, generate a concise title:
+
+Plan:
+${args.plan.slice(0, 1500)}
+
+Original prompt: "${todo.prompt || todo.title}"`,
+				schema: TitleSchema,
+				temperature: 0.3,
+			});
+			console.log("[REGEN-COMPLETE] Title:", titleResult.title);
+
+			// Generate description from plan
+			console.log("[REGEN-COMPLETE] Generating description...");
+			const { object: descResult } = await generateObject({
+				model,
+				system: `You write succinct task descriptions (2-3 lines max).
+Be direct and actionable. Summarize what this task accomplishes.`,
+				prompt: `Based on this implementation plan, write a 2-3 line description:
+
+Plan:
+${args.plan.slice(0, 1500)}
+
+Original prompt: "${todo.prompt || ""}"`,
+				schema: DescriptionSchema,
+				temperature: 0.3,
+			});
+			console.log("[REGEN-COMPLETE] Description generated");
+
+			// Save title and description
+			await ctx.runMutation(internal.workspaces.updateTodoContentInternal, {
+				todoId: args.todoId,
+				title: titleResult.title,
+				description: descResult.description,
+			});
+			console.log("[REGEN-COMPLETE] Title and description saved");
+
+			// Generate sub-tasks
+			console.log("[REGEN-COMPLETE] Scheduling sub-task generation...");
+			await ctx.scheduler.runAfter(0, internal.ticketAi.generateSubTasksFromPlan, {
+				todoId: args.todoId,
+				plan: args.plan,
+			});
+
+			console.log("[REGEN-COMPLETE] Regeneration complete");
+			return null;
+		} catch (error) {
+			console.error("[REGEN-COMPLETE] Error:", error);
+			return null;
 		}
 	},
 });

@@ -372,6 +372,121 @@ http.route({
 	}),
 });
 
+// ============ NOTION OAUTH CALLBACK ============
+
+http.route({
+	path: "/auth/notion/callback",
+	method: "GET",
+	handler: httpAction(async (ctx, request) => {
+		const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+		try {
+			const url = new URL(request.url);
+			const code = url.searchParams.get("code");
+			const state = url.searchParams.get("state");
+			const error = url.searchParams.get("error");
+
+			// Handle OAuth errors from Notion
+			if (error) {
+				console.error("Notion OAuth error:", error);
+				const errorUrl = new URL("/app", appUrl);
+				errorUrl.searchParams.set("notion_error", error);
+				return Response.redirect(errorUrl.toString(), 302);
+			}
+
+			if (!code) {
+				return new Response("Missing code parameter", { status: 400 });
+			}
+
+			if (!state) {
+				return new Response("Missing state parameter", { status: 400 });
+			}
+
+			// Exchange code for access token
+			const clientId = process.env.NOTION_CLIENT_ID;
+			const clientSecret = process.env.NOTION_CLIENT_SECRET;
+
+			if (!clientId || !clientSecret) {
+				console.error("Notion OAuth not configured");
+				return new Response("OAuth not configured", { status: 500 });
+			}
+
+			const convexUrl = process.env.CONVEX_SITE_URL;
+			if (!convexUrl) {
+				console.error("CONVEX_SITE_URL not configured");
+				return new Response("Server configuration error", { status: 500 });
+			}
+
+			const redirectUri = `${convexUrl}/auth/notion/callback`;
+
+			// Notion requires Basic Auth with base64-encoded credentials
+			const credentials = btoa(`${clientId}:${clientSecret}`);
+
+			const tokenResponse = await fetch(
+				"https://api.notion.com/v1/oauth/token",
+				{
+					method: "POST",
+					headers: {
+						Accept: "application/json",
+						"Content-Type": "application/json",
+						Authorization: `Basic ${credentials}`,
+					},
+					body: JSON.stringify({
+						grant_type: "authorization_code",
+						code,
+						redirect_uri: redirectUri,
+					}),
+				},
+			);
+
+			const tokenData = await tokenResponse.json();
+
+			if (tokenData.error) {
+				console.error("Notion OAuth token error:", tokenData.error);
+				const errorUrl = new URL("/app", appUrl);
+				errorUrl.searchParams.set("notion_error", tokenData.error);
+				return Response.redirect(errorUrl.toString(), 302);
+			}
+
+			const accessToken = tokenData.access_token;
+
+			// Verify state and persist encrypted token to the database
+			const result = await ctx.runMutation(
+				internal.integrations.completeNotionOAuth,
+				{
+					state,
+					accessToken,
+					workspaceId: tokenData.workspace_id,
+					workspaceName: tokenData.workspace_name,
+					workspaceIcon: tokenData.workspace_icon,
+					botId: tokenData.bot_id,
+				},
+			);
+
+			if (!result.success) {
+				console.error("Failed to complete Notion OAuth:", result.error);
+				const errorUrl = new URL("/app", appUrl);
+				errorUrl.searchParams.set(
+					"notion_error",
+					result.error || "Unknown error",
+				);
+				return Response.redirect(errorUrl.toString(), 302);
+			}
+
+			// Redirect to app without tokens in URL
+			const successUrl = new URL("/app", appUrl);
+			successUrl.searchParams.set("notion_connected", "true");
+
+			return Response.redirect(successUrl.toString(), 302);
+		} catch (error) {
+			console.error("Error in Notion OAuth callback:", error);
+			const errorUrl = new URL("/app", appUrl);
+			errorUrl.searchParams.set("notion_error", "Internal error");
+			return Response.redirect(errorUrl.toString(), 302);
+		}
+	}),
+});
+
 // ============ MCP SERVER ============
 
 // MCP Protocol Types
