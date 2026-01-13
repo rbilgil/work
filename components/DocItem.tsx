@@ -1,6 +1,7 @@
 import { useAction, useMutation } from "convex/react";
 import { ExternalLink, FileText, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -128,9 +129,11 @@ export default function DocItem({ doc }: DocItemProps) {
 								placeholder="Write your document content here..."
 							/>
 						) : (
-							<div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-								{doc.content || (
-									<span className="text-slate-400">No content yet</span>
+							<div className="prose prose-xs dark:prose-invert max-w-none prose-headings:text-sm prose-headings:font-semibold prose-p:text-xs prose-p:leading-relaxed prose-li:text-xs prose-code:text-xs prose-pre:text-xs">
+								{doc.content ? (
+									<ReactMarkdown>{doc.content}</ReactMarkdown>
+								) : (
+									<span className="text-slate-400 text-xs">No content yet</span>
 								)}
 							</div>
 						)}

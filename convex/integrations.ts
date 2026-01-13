@@ -304,7 +304,65 @@ export const completeGitHubOAuth = internalMutation({
 	},
 });
 
-// ============ NOTION OAUTH STATE MANAGEMENT ============
+// ============ NOTION INTEGRATION ============
+
+/**
+ * Save Notion internal integration secret for an organization
+ * This allows users to use an internal integration instead of going through OAuth
+ */
+export const saveNotionApiKey = mutation({
+	args: {
+		organizationId: v.id("organizations"),
+		apiKey: v.string(),
+	},
+	returns: v.boolean(),
+	handler: async (ctx, args) => {
+		const user = await requireAuthUser(ctx);
+
+		// Verify organization membership
+		if (!(await verifyOrgMembership(ctx, args.organizationId, user._id))) {
+			throw new Error("Organization not found or access denied");
+		}
+
+		// Check if integration already exists
+		const existing = await ctx.db
+			.query("organization_integrations")
+			.withIndex("by_organization_and_type", (q) =>
+				q.eq("organizationId", args.organizationId).eq("type", "notion"),
+			)
+			.unique();
+
+		// Encrypt the API key
+		const encryptedAccessToken = await encryptString(args.apiKey);
+
+		// Store config indicating this is a manual/internal integration
+		const encryptedConfig = await encryptString(
+			JSON.stringify({ type: "internal_integration" }),
+		);
+
+		if (existing) {
+			await ctx.db.patch(existing._id, {
+				encryptedAccessToken,
+				encryptedConfig,
+				// Clear any OAuth state if present
+				oauthState: undefined,
+				oauthStateExpiresAt: undefined,
+				updatedAt: Date.now(),
+			});
+		} else {
+			await ctx.db.insert("organization_integrations", {
+				organizationId: args.organizationId,
+				type: "notion",
+				encryptedAccessToken,
+				encryptedConfig,
+				createdByUserId: user._id,
+				createdAt: Date.now(),
+			});
+		}
+
+		return true;
+	},
+});
 
 /**
  * Initiate Notion OAuth flow for an organization - creates state for CSRF protection

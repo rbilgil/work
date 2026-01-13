@@ -41,6 +41,8 @@ export default function IntegrationsModal({
 }: IntegrationsModalProps) {
 	const [cursorApiKey, setCursorApiKey] = useState("");
 	const [savingCursor, setSavingCursor] = useState(false);
+	const [notionApiKey, setNotionApiKey] = useState("");
+	const [savingNotion, setSavingNotion] = useState(false);
 	const [selectedRepo, setSelectedRepo] = useState<{
 		owner: string;
 		name: string;
@@ -65,6 +67,7 @@ export default function IntegrationsModal({
 	const disconnectRepo = useMutation(api.integrations.disconnectRepo);
 	const initiateGitHubOAuth = useMutation(api.integrations.initiateGitHubOAuth);
 	const initiateNotionOAuth = useMutation(api.integrations.initiateNotionOAuth);
+	const saveNotionApiKey = useMutation(api.integrations.saveNotionApiKey);
 
 	// Handle OAuth callbacks (success/error messages only - tokens are stored server-side)
 	useEffect(() => {
@@ -117,6 +120,17 @@ export default function IntegrationsModal({
 	const handleRemoveCursor = async () => {
 		if (!organizationId) return;
 		await removeIntegration({ organizationId, type: "cursor" });
+	};
+
+	const handleSaveNotionKey = async () => {
+		if (!organizationId || !notionApiKey.trim()) return;
+		setSavingNotion(true);
+		try {
+			await saveNotionApiKey({ organizationId, apiKey: notionApiKey.trim() });
+			setNotionApiKey("");
+		} finally {
+			setSavingNotion(false);
+		}
 	};
 
 	const handleConnectNotion = async () => {
@@ -287,10 +301,38 @@ export default function IntegrationsModal({
 									</Button>
 								</div>
 							) : (
-								<Button onClick={handleConnectNotion} variant="outline">
-									<FileText className="w-4 h-4 mr-2" />
-									Connect Notion
-								</Button>
+								<div className="flex flex-col gap-3">
+									{/* Internal Integration (API Key) */}
+									<div className="flex gap-2">
+										<Input
+											type="password"
+											value={notionApiKey}
+											onChange={(e) => setNotionApiKey(e.target.value)}
+											placeholder="Paste internal integration secret"
+											className="flex-1"
+										/>
+										<Button
+											onClick={handleSaveNotionKey}
+											disabled={!notionApiKey.trim() || savingNotion}
+										>
+											{savingNotion ? (
+												<Loader2 className="w-4 h-4 animate-spin" />
+											) : (
+												"Save"
+											)}
+										</Button>
+									</div>
+									<div className="flex items-center gap-2 text-xs text-slate-400">
+										<span className="flex-1 border-t border-slate-200 dark:border-slate-700" />
+										<span>or connect via OAuth</span>
+										<span className="flex-1 border-t border-slate-200 dark:border-slate-700" />
+									</div>
+									{/* OAuth Option */}
+									<Button onClick={handleConnectNotion} variant="outline">
+										<FileText className="w-4 h-4 mr-2" />
+										Connect with Notion OAuth
+									</Button>
+								</div>
 							)}
 							<p className="text-xs text-slate-400">
 								After connecting, share your Notion pages with the integration
