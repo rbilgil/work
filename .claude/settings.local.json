@@ -5,7 +5,14 @@
       "Bash(npx tsc:*)",
       "Bash(npx convex codegen)",
       "Bash(npx convex dev:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "WebSearch",
+      "WebFetch(domain:e2b.dev)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:opencode.ai)",
+      "Bash(npx shadcn@latest add dropdown-menu:*)"
     ]
   }
 }

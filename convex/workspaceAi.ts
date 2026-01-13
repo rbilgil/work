@@ -1,20 +1,14 @@
 "use node";
 
-import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { v } from "convex/values";
 import { z } from "zod";
-import { action, internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
-
-const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { action, internalAction } from "./_generated/server";
 
 function selectModel() {
-	const modelName = process.env.AI_MODEL || "gpt-4o-mini";
-	if (!process.env.OPENAI_API_KEY) {
-		throw new Error("OPENAI_API_KEY not configured");
-	}
-	return openai(modelName);
+	const modelName = process.env.AI_MODEL || "google/gemini-3-flash";
+	return modelName;
 }
 
 // ============ SCHEMAS ============
@@ -27,12 +21,14 @@ const TaskDescriptionSchema = z.object({
 		),
 	suggestedSteps: z
 		.array(z.string())
-		.optional()
-		.describe("Optional list of concrete next steps to complete this task"),
+		.describe(
+			"List of concrete next steps to complete this task. Can be empty array if not applicable.",
+		),
 	relevantContext: z
 		.string()
-		.optional()
-		.describe("Key context from the chat that informed this description"),
+		.describe(
+			"Key context from the chat that informed this description. Can be empty string if no relevant context.",
+		),
 });
 
 const AgentPromptSchema = z.object({
@@ -40,17 +36,15 @@ const AgentPromptSchema = z.object({
 		.string()
 		.describe("A detailed prompt for an AI agent to execute this task"),
 	context: z.string().describe("Relevant context from the workspace"),
-	expectedOutcome: z
-		.string()
-		.describe("What success looks like for this task"),
+	expectedOutcome: z.string().describe("What success looks like for this task"),
 });
 
 // ============ PUBLIC ACTIONS ============
 
 type TaskDescriptionResult = {
 	description: string;
-	suggestedSteps?: string[];
-	relevantContext?: string;
+	suggestedSteps: string[];
+	relevantContext: string;
 };
 
 export const generateTaskDescription = action({
@@ -61,8 +55,8 @@ export const generateTaskDescription = action({
 	},
 	returns: v.object({
 		description: v.string(),
-		suggestedSteps: v.optional(v.array(v.string())),
-		relevantContext: v.optional(v.string()),
+		suggestedSteps: v.array(v.string()),
+		relevantContext: v.string(),
 	}),
 	handler: async (ctx, args): Promise<TaskDescriptionResult> => {
 		// Verify user is authenticated
@@ -71,22 +65,52 @@ export const generateTaskDescription = action({
 			throw new Error("Unauthorized");
 		}
 
+		// Delegate to internal action
+		return await ctx.runAction(
+			internal.workspaceAi.generateTaskDescriptionInternal,
+			args,
+		);
+	},
+});
+
+// Internal version for use by other internal actions (no auth check)
+export const generateTaskDescriptionInternal = internalAction({
+	args: {
+		workspaceId: v.id("workspaces"),
+		todoId: v.id("workspace_todos"),
+		taskTitle: v.string(),
+	},
+	returns: v.object({
+		description: v.string(),
+		suggestedSteps: v.array(v.string()),
+		relevantContext: v.string(),
+	}),
+	handler: async (ctx, args): Promise<TaskDescriptionResult> => {
 		const model = selectModel();
 
 		// Fetch all messages in workspace for context
-		const messages = await ctx.runQuery(internal.workspaces.listMessagesInternal, {
-			workspaceId: args.workspaceId,
-		});
+		const messages = await ctx.runQuery(
+			internal.workspaces.listMessagesInternal,
+			{
+				workspaceId: args.workspaceId,
+			},
+		);
 
 		// Fetch workspace info
-		const workspace = await ctx.runQuery(internal.workspaces.getWorkspaceInternal, {
-			id: args.workspaceId,
-		});
+		const workspace = await ctx.runQuery(
+			internal.workspaces.getWorkspaceInternal,
+			{
+				id: args.workspaceId,
+			},
+		);
 
 		// Build context from messages (limit to most recent 50 for token efficiency)
 		const recentMessages = messages.slice(-50);
 		const chatContext = recentMessages
-			.map((m) => `[${new Date(m.createdAt).toLocaleString()}]: ${m.content}`)
+			.map(
+				(m: { createdAt: number; content: string }) =>
+					`[${new Date(m.createdAt).toLocaleString()}]: ${m.content}`,
+			)
 			.join("\n");
 
 		const { object }: { object: TaskDescriptionResult } = await generateObject({
@@ -127,18 +151,23 @@ export const generateAndUpdateDescription = internalAction({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		try {
-			const result = await ctx.runAction(api.workspaceAi.generateTaskDescription, {
-				workspaceId: args.workspaceId,
-				todoId: args.todoId,
-				taskTitle: args.taskTitle,
-			});
+			const result = await ctx.runAction(
+				internal.workspaceAi.generateTaskDescriptionInternal,
+				{
+					workspaceId: args.workspaceId,
+					todoId: args.todoId,
+					taskTitle: args.taskTitle,
+				},
+			);
 
 			// Build full description with steps if available
 			let fullDescription = result.description;
 			if (result.suggestedSteps && result.suggestedSteps.length > 0) {
 				fullDescription +=
 					"\n\n**Steps:**\n" +
-					result.suggestedSteps.map((s: string, i: number) => `${i + 1}. ${s}`).join("\n");
+					result.suggestedSteps
+						.map((s: string, i: number) => `${i + 1}. ${s}`)
+						.join("\n");
 			}
 
 			await ctx.runMutation(api.workspaces.updateWorkspaceTodo, {
@@ -171,9 +200,12 @@ export const generateAgentPrompt = internalAction({
 			if (!todo) throw new Error("Todo not found");
 
 			// Fetch messages for context
-			const messages = await ctx.runQuery(internal.workspaces.listMessagesInternal, {
-				workspaceId: args.workspaceId,
-			});
+			const messages = await ctx.runQuery(
+				internal.workspaces.listMessagesInternal,
+				{
+					workspaceId: args.workspaceId,
+				},
+			);
 
 			// Fetch docs for context
 			const docs = await ctx.runQuery(internal.workspaces.listDocsInternal, {
@@ -186,18 +218,26 @@ export const generateAgentPrompt = internalAction({
 			});
 
 			// Fetch workspace info
-			const workspace = await ctx.runQuery(internal.workspaces.getWorkspaceInternal, {
-				id: args.workspaceId,
-			});
+			const workspace = await ctx.runQuery(
+				internal.workspaces.getWorkspaceInternal,
+				{
+					id: args.workspaceId,
+				},
+			);
 
 			const chatContext = (messages as { content: string }[])
 				.slice(-30)
 				.map((m: { content: string }) => m.content)
 				.join("\n");
 			const docContext = (docs as { title: string; content: string }[])
-				.map((d: { title: string; content: string }) => `${d.title}: ${d.content.slice(0, 500)}`)
+				.map(
+					(d: { title: string; content: string }) =>
+						`${d.title}: ${d.content.slice(0, 500)}`,
+				)
 				.join("\n\n");
-			const linkContext = (links as { title: string; url: string }[]).map((l: { title: string; url: string }) => `${l.title}: ${l.url}`).join("\n");
+			const linkContext = (links as { title: string; url: string }[])
+				.map((l: { title: string; url: string }) => `${l.title}: ${l.url}`)
+				.join("\n");
 
 			const { object } = await generateObject({
 				model,
@@ -239,4 +279,3 @@ Create a comprehensive agent prompt for this task.`,
 		return null;
 	},
 });
-

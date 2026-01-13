@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { internalQuery, mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { getAuthUser, requireAuthUser } from "./auth";
 import type { Id } from "./_generated/dataModel";
 
@@ -56,6 +56,49 @@ export const setContextRefs = mutation({
 			throw new Error("Unauthorized");
 		}
 
+		// Delete existing refs
+		const existingRefs = await ctx.db
+			.query("todo_context_refs")
+			.withIndex("by_todo", (q) => q.eq("todoId", args.todoId))
+			.collect();
+
+		for (const ref of existingRefs) {
+			await ctx.db.delete(ref._id);
+		}
+
+		// Insert new refs
+		for (const ref of args.refs) {
+			await ctx.db.insert("todo_context_refs", {
+				todoId: args.todoId,
+				refType: ref.refType,
+				refId: ref.refId,
+				createdAt: Date.now(),
+			});
+		}
+
+		return true;
+	},
+});
+
+/**
+ * Set context references for a todo (internal - no auth check)
+ */
+export const setContextRefsInternal = internalMutation({
+	args: {
+		todoId: v.id("workspace_todos"),
+		refs: v.array(
+			v.object({
+				refType: v.union(
+					v.literal("doc"),
+					v.literal("message"),
+					v.literal("link"),
+				),
+				refId: v.string(),
+			}),
+		),
+	},
+	returns: v.boolean(),
+	handler: async (ctx, args) => {
 		// Delete existing refs
 		const existingRefs = await ctx.db
 			.query("todo_context_refs")
@@ -171,7 +214,7 @@ export const removeContextRef = mutation({
 });
 
 /**
- * Get context references for a todo
+ * Get context references for a todo with resolved titles
  */
 export const getContextRefs = query({
 	args: {
@@ -181,6 +224,7 @@ export const getContextRefs = query({
 		v.object({
 			refType: v.union(v.literal("doc"), v.literal("message"), v.literal("link")),
 			refId: v.string(),
+			title: v.string(),
 			createdAt: v.number(),
 		}),
 	),
@@ -205,11 +249,44 @@ export const getContextRefs = query({
 			.withIndex("by_todo", (q) => q.eq("todoId", args.todoId))
 			.collect();
 
-		return refs.map((ref) => ({
-			refType: ref.refType,
-			refId: ref.refId,
-			createdAt: ref.createdAt,
-		}));
+		// Resolve titles for each reference
+		const resolvedRefs = await Promise.all(
+			refs.map(async (ref) => {
+				let title = ref.refId; // Fallback to ID
+
+				try {
+					if (ref.refType === "doc") {
+						const doc = await ctx.db.get(ref.refId as Id<"workspace_docs">);
+						if (doc) {
+							title = doc.title;
+						}
+					} else if (ref.refType === "message") {
+						const message = await ctx.db.get(ref.refId as Id<"workspace_messages">);
+						if (message) {
+							// Use first 50 chars of message content as title
+							title = message.content.slice(0, 50) + (message.content.length > 50 ? "..." : "");
+						}
+					} else if (ref.refType === "link") {
+						const link = await ctx.db.get(ref.refId as Id<"workspace_links">);
+						if (link) {
+							title = link.title;
+						}
+					}
+				} catch (e) {
+					// Invalid ref ID - use fallback title
+					console.warn("Invalid context ref ID:", ref.refId);
+				}
+
+				return {
+					refType: ref.refType,
+					refId: ref.refId,
+					title,
+					createdAt: ref.createdAt,
+				};
+			}),
+		);
+
+		return resolvedRefs;
 	},
 });
 
@@ -292,34 +369,39 @@ export const getTodoWithFullContext = query({
 		}> = [];
 
 		for (const ref of refs) {
-			if (ref.refType === "doc") {
-				const doc = await ctx.db.get(ref.refId as Id<"workspace_docs">);
-				if (doc) {
-					docs.push({
-						_id: doc._id,
-						title: doc.title,
-						content: doc.content,
-					});
+			try {
+				if (ref.refType === "doc") {
+					const doc = await ctx.db.get(ref.refId as Id<"workspace_docs">);
+					if (doc) {
+						docs.push({
+							_id: doc._id,
+							title: doc.title,
+							content: doc.content,
+						});
+					}
+				} else if (ref.refType === "message") {
+					const message = await ctx.db.get(ref.refId as Id<"workspace_messages">);
+					if (message) {
+						messages.push({
+							_id: message._id,
+							content: message.content,
+							createdAt: message.createdAt,
+						});
+					}
+				} else if (ref.refType === "link") {
+					const link = await ctx.db.get(ref.refId as Id<"workspace_links">);
+					if (link) {
+						links.push({
+							_id: link._id,
+							url: link.url,
+							title: link.title,
+							type: link.type,
+						});
+					}
 				}
-			} else if (ref.refType === "message") {
-				const message = await ctx.db.get(ref.refId as Id<"workspace_messages">);
-				if (message) {
-					messages.push({
-						_id: message._id,
-						content: message.content,
-						createdAt: message.createdAt,
-					});
-				}
-			} else if (ref.refType === "link") {
-				const link = await ctx.db.get(ref.refId as Id<"workspace_links">);
-				if (link) {
-					links.push({
-						_id: link._id,
-						url: link.url,
-						title: link.title,
-						type: link.type,
-					});
-				}
+			} catch (e) {
+				// Skip invalid ref IDs
+				console.warn("Invalid context ref ID:", ref.refId);
 			}
 		}
 
@@ -423,21 +505,26 @@ export const getFullContextForAgent = internalQuery({
 		const linksContent: string[] = [];
 
 		for (const ref of refs) {
-			if (ref.refType === "doc") {
-				const doc = await ctx.db.get(ref.refId as Id<"workspace_docs">);
-				if (doc) {
-					docsContent.push(`## ${doc.title}\n${doc.content}`);
+			try {
+				if (ref.refType === "doc") {
+					const doc = await ctx.db.get(ref.refId as Id<"workspace_docs">);
+					if (doc) {
+						docsContent.push(`## ${doc.title}\n${doc.content}`);
+					}
+				} else if (ref.refType === "message") {
+					const message = await ctx.db.get(ref.refId as Id<"workspace_messages">);
+					if (message) {
+						messagesContent.push(message.content);
+					}
+				} else if (ref.refType === "link") {
+					const link = await ctx.db.get(ref.refId as Id<"workspace_links">);
+					if (link) {
+						linksContent.push(`- [${link.title}](${link.url})`);
+					}
 				}
-			} else if (ref.refType === "message") {
-				const message = await ctx.db.get(ref.refId as Id<"workspace_messages">);
-				if (message) {
-					messagesContent.push(message.content);
-				}
-			} else if (ref.refType === "link") {
-				const link = await ctx.db.get(ref.refId as Id<"workspace_links">);
-				if (link) {
-					linksContent.push(`- [${link.title}](${link.url})`);
-				}
+			} catch (e) {
+				// Skip invalid refs (e.g., malformed IDs from AI context linking)
+				console.warn("Skipping invalid context ref:", ref.refId, e);
 			}
 		}
 

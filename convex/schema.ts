@@ -114,8 +114,21 @@ export default defineSchema({
 	// Workspace Todos - Todos specific to a workspace (Kanban style)
 	workspace_todos: defineTable({
 		workspaceId: v.id("workspaces"),
+		parentId: v.optional(v.id("workspace_todos")), // For sub-tasks
 		title: v.string(),
 		description: v.optional(v.string()),
+		prompt: v.optional(v.string()), // User's original prompt/instructions for AI
+		plan: v.optional(v.string()), // AI-generated implementation plan (markdown)
+		planGeneratedAt: v.optional(v.number()), // Timestamp of last plan generation
+		planStatus: v.optional(
+			v.union(
+				v.literal("pending"), // Waiting to generate
+				v.literal("generating"), // Cursor agent is analyzing
+				v.literal("ready"), // Plan is ready
+				v.literal("failed"), // Generation failed
+			),
+		),
+		currentPlanningRunId: v.optional(v.id("agent_runs")), // Current planning agent run
 		status: v.union(
 			v.literal("backlog"),
 			v.literal("todo"),
@@ -124,7 +137,7 @@ export default defineSchema({
 			v.literal("done"),
 		),
 		assignee: v.optional(v.union(v.literal("user"), v.literal("agent"))),
-		agentType: v.optional(v.literal("cursor")), // Which agent type (extensible for future)
+		agentType: v.optional(v.union(v.literal("cursor"), v.literal("local"))), // Which agent type
 		agentPrompt: v.optional(v.string()),
 		currentAgentRunId: v.optional(v.id("agent_runs")), // Current/latest agent run
 		order: v.optional(v.number()), // For kanban drag-drop ordering
@@ -134,7 +147,8 @@ export default defineSchema({
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_and_status", ["workspaceId", "status"])
-		.index("by_user", ["userId"]),
+		.index("by_user", ["userId"])
+		.index("by_parent", ["parentId"]),
 
 	// Todo Context References - Explicit links between todos and their context
 	todo_context_refs: defineTable({
@@ -146,12 +160,25 @@ export default defineSchema({
 		.index("by_todo", ["todoId"])
 		.index("by_ref", ["refType", "refId"]),
 
+	// Todo Comments - Comments on todos with @Agent support
+	todo_comments: defineTable({
+		todoId: v.id("workspace_todos"),
+		content: v.string(), // Markdown content
+		authorType: v.union(v.literal("user"), v.literal("agent")),
+		userId: v.optional(v.id("users")), // Set when authorType === "user"
+		mentionsAgent: v.boolean(), // True if @Agent is in content
+		createdAt: v.number(),
+	})
+		.index("by_todo", ["todoId"])
+		.index("by_todo_and_created", ["todoId", "createdAt"]),
+
 	// Agent Runs - Track execution of AI coding agents
 	agent_runs: defineTable({
 		todoId: v.id("workspace_todos"),
 		workspaceId: v.id("workspaces"),
 		userId: v.id("users"),
 		agentType: v.literal("cursor"),
+		runType: v.optional(v.union(v.literal("planning"), v.literal("implementation"))), // planning = plan generation, implementation = actual code work
 		externalAgentId: v.string(), // Cursor's agent ID (bc_xxx)
 		status: v.union(
 			v.literal("creating"),
@@ -172,6 +199,21 @@ export default defineSchema({
 		.index("by_todo", ["todoId"])
 		.index("by_external_agent_id", ["externalAgentId"])
 		.index("by_pr", ["prNumber"]),
+
+	// MCP Access Tokens - For local agent access to task context
+	mcp_access_tokens: defineTable({
+		todoId: v.id("workspace_todos"),
+		workspaceId: v.id("workspaces"),
+		organizationId: v.id("organizations"),
+		token: v.string(), // Random token for authentication
+		createdByUserId: v.id("users"),
+		createdAt: v.string(), // ISO 8601 datetime
+		expiresAt: v.string(), // ISO 8601 datetime (1 hour validity)
+		lastUsedAt: v.optional(v.string()), // ISO 8601 datetime
+		revokedAt: v.optional(v.string()), // ISO 8601 datetime
+	})
+		.index("by_token", ["token"])
+		.index("by_todo", ["todoId"]),
 
 	// Workspace Links - External links (emails, spreadsheets, figma, etc.)
 	workspace_links: defineTable({

@@ -68,26 +68,41 @@ export default function ContextRefSelector({
 	const links = useQuery(api.workspaces.listLinks, { workspaceId });
 	const messages = useQuery(api.workspaces.listMessages, { workspaceId });
 
-	// Auto-suggest context when title changes
+	// Auto-suggest context when title changes (only for new tasks without existing refs)
+	const [hasAttemptedSuggestions, setHasAttemptedSuggestions] = useState(false);
+
 	useEffect(() => {
-		if (todoTitle && todoTitle.length > 5) {
-			const debounceTimer = setTimeout(async () => {
-				setLoadingSuggestions(true);
-				try {
-					const result = await suggestContext({
-						workspaceId,
-						todoTitle,
-					});
+		// Skip if this is an existing task with refs, or if we already attempted
+		if (todoId && selectedRefs.length > 0) return;
+		if (hasAttemptedSuggestions) return;
+		if (!todoTitle || todoTitle.length <= 5) return;
+
+		let cancelled = false;
+		const debounceTimer = setTimeout(async () => {
+			setLoadingSuggestions(true);
+			setHasAttemptedSuggestions(true);
+			try {
+				const result = await suggestContext({
+					workspaceId,
+					todoTitle,
+				});
+				if (!cancelled) {
 					setSuggestions(result.suggestions);
-				} catch (error) {
-					console.error("Error getting suggestions:", error);
-				} finally {
+				}
+			} catch (error) {
+				console.error("Error getting suggestions:", error);
+			} finally {
+				if (!cancelled) {
 					setLoadingSuggestions(false);
 				}
-			}, 500);
-			return () => clearTimeout(debounceTimer);
-		}
-	}, [todoTitle, workspaceId, suggestContext]);
+			}
+		}, 500);
+
+		return () => {
+			cancelled = true;
+			clearTimeout(debounceTimer);
+		};
+	}, [todoTitle, todoId, workspaceId, suggestContext, selectedRefs.length, hasAttemptedSuggestions]);
 
 	const isSelected = (refType: string, refId: string) => {
 		return selectedRefs.some(
@@ -334,16 +349,6 @@ export default function ContextRefSelector({
 	// Full view for detail modal
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="flex items-center justify-between">
-				<h4 className="font-medium text-sm">Linked Context</h4>
-				{loadingSuggestions && (
-					<span className="flex items-center gap-1 text-xs text-slate-500">
-						<Loader2 className="w-3 h-3 animate-spin" />
-						Analyzing...
-					</span>
-				)}
-			</div>
-
 			{/* Selected refs */}
 			{selectedRefs.length > 0 && (
 				<div className="flex flex-col gap-1">

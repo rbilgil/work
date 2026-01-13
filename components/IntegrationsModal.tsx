@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import RepoSelector from "@/components/RepoSelector";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 
@@ -42,9 +43,11 @@ export default function IntegrationsModal({
 	const [savingCursor, setSavingCursor] = useState(false);
 	const [notionApiToken, setNotionApiToken] = useState("");
 	const [savingNotion, setSavingNotion] = useState(false);
-	const [repoOwner, setRepoOwner] = useState("");
-	const [repoName, setRepoName] = useState("");
-	const [repoBranch, setRepoBranch] = useState("main");
+	const [selectedRepo, setSelectedRepo] = useState<{
+		owner: string;
+		name: string;
+		defaultBranch: string;
+	} | null>(null);
 	const [savingRepo, setSavingRepo] = useState(false);
 
 	// Integrations are now organization-scoped
@@ -84,12 +87,14 @@ export default function IntegrationsModal({
 		}
 	}, []);
 
-	// Pre-fill repo fields if already connected
+	// Pre-fill repo if already connected
 	useEffect(() => {
 		if (workspaceRepo) {
-			setRepoOwner(workspaceRepo.owner);
-			setRepoName(workspaceRepo.repo);
-			setRepoBranch(workspaceRepo.defaultBranch);
+			setSelectedRepo({
+				owner: workspaceRepo.owner,
+				name: workspaceRepo.repo,
+				defaultBranch: workspaceRepo.defaultBranch,
+			});
 		}
 	}, [workspaceRepo]);
 
@@ -143,14 +148,14 @@ export default function IntegrationsModal({
 	};
 
 	const handleConnectRepo = async () => {
-		if (!workspaceId || !repoOwner.trim() || !repoName.trim()) return;
+		if (!workspaceId || !selectedRepo) return;
 		setSavingRepo(true);
 		try {
 			await connectRepo({
 				workspaceId,
-				owner: repoOwner.trim(),
-				repo: repoName.trim(),
-				defaultBranch: repoBranch.trim() || "main",
+				owner: selectedRepo.owner,
+				repo: selectedRepo.name,
+				defaultBranch: selectedRepo.defaultBranch,
 			});
 		} finally {
 			setSavingRepo(false);
@@ -160,9 +165,7 @@ export default function IntegrationsModal({
 	const handleDisconnectRepo = async () => {
 		if (!workspaceId) return;
 		await disconnectRepo({ workspaceId });
-		setRepoOwner("");
-		setRepoName("");
-		setRepoBranch("main");
+		setSelectedRepo(null);
 	};
 
 	return (
@@ -391,41 +394,25 @@ export default function IntegrationsModal({
 										</div>
 									) : (
 										<div className="flex flex-col gap-2">
-											<div className="flex gap-2">
-												<Input
-													value={repoOwner}
-													onChange={(e) => setRepoOwner(e.target.value)}
-													placeholder="Owner (e.g., octocat)"
-													className="flex-1"
-												/>
-												<span className="text-slate-400 self-center">/</span>
-												<Input
-													value={repoName}
-													onChange={(e) => setRepoName(e.target.value)}
-													placeholder="Repository"
-													className="flex-1"
-												/>
-											</div>
-											<div className="flex gap-2">
-												<Input
-													value={repoBranch}
-													onChange={(e) => setRepoBranch(e.target.value)}
-													placeholder="Default branch (e.g., main)"
-													className="w-40"
-												/>
-												<Button
-													onClick={handleConnectRepo}
-													disabled={
-														!repoOwner.trim() || !repoName.trim() || savingRepo
-													}
-												>
-													{savingRepo ? (
-														<Loader2 className="w-4 h-4 animate-spin" />
-													) : (
-														"Connect"
-													)}
-												</Button>
-											</div>
+											<RepoSelector
+												organizationId={organizationId}
+												selectedRepo={selectedRepo}
+												onSelect={setSelectedRepo}
+											/>
+											{selectedRepo && (
+												<div className="flex justify-end">
+													<Button
+														onClick={handleConnectRepo}
+														disabled={savingRepo}
+													>
+														{savingRepo ? (
+															<Loader2 className="w-4 h-4 animate-spin" />
+														) : (
+															"Connect Repository"
+														)}
+													</Button>
+												</div>
+											)}
 										</div>
 									)}
 								</div>
