@@ -322,19 +322,43 @@ export const createMessage = mutation({
 				.collect();
 			const existingUrls = new Set(existingLinks.map((l) => l.url));
 
-			// Get existing docs for Notion deduplication
+			// Get existing docs for deduplication (check by sourceUrl for Notion docs)
 			const existingDocs = await ctx.db
 				.query("workspace_docs")
 				.withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
 				.collect();
+			const existingDocUrls = new Set(
+				existingDocs.filter((d) => d.sourceUrl).map((d) => d.sourceUrl),
+			);
 
 			for (const url of urls) {
+				// Handle Notion URLs separately - add to docs only, not links
+				if (isNotionUrl(url)) {
+					// Skip if we already have a doc with this source URL
+					if (existingDocUrls.has(url)) continue;
+					// Also skip if this URL is already in links (legacy behavior)
+					if (existingUrls.has(url)) continue;
+
+					// Schedule async fetch of Notion content
+					// This will create/update a doc with the actual content
+					await ctx.scheduler.runAfter(
+						0,
+						internal.notionApi.fetchAndCreateNotionDoc,
+						{
+							workspaceId: args.workspaceId,
+							notionUrl: url,
+							userId: user._id,
+						},
+					);
+					continue;
+				}
+
+				// For non-Notion URLs, add to workspace_links as before
 				if (existingUrls.has(url)) continue;
 
 				const linkType = detectLinkType(url);
 				const title = extractTitleFromUrl(url);
 
-				// Add to workspace_links
 				await ctx.db.insert("workspace_links", {
 					workspaceId: args.workspaceId,
 					url,
@@ -343,22 +367,6 @@ export const createMessage = mutation({
 					userId: user._id,
 					createdAt: Date.now(),
 				});
-
-				// If Notion link, also add to workspace_docs
-				if (isNotionUrl(url)) {
-					const alreadyHasDoc = existingDocs.some((d) =>
-						d.content.includes(url),
-					);
-					if (!alreadyHasDoc) {
-						await ctx.db.insert("workspace_docs", {
-							workspaceId: args.workspaceId,
-							title: `Notion: ${title}`,
-							content: `Linked from chat:\n${url}`,
-							userId: user._id,
-							createdAt: Date.now(),
-						});
-					}
-				}
 			}
 		}
 
@@ -541,6 +549,9 @@ export const listDocs = query({
 			workspaceId: v.id("workspaces"),
 			title: v.string(),
 			content: v.string(),
+			sourceUrl: v.optional(v.string()),
+			sourceType: v.optional(v.union(v.literal("notion"), v.literal("manual"))),
+			lastFetchedAt: v.optional(v.number()),
 			userId: v.id("users"),
 			createdAt: v.number(),
 			updatedAt: v.optional(v.number()),
@@ -573,6 +584,9 @@ export const getDoc = query({
 			workspaceId: v.id("workspaces"),
 			title: v.string(),
 			content: v.string(),
+			sourceUrl: v.optional(v.string()),
+			sourceType: v.optional(v.union(v.literal("notion"), v.literal("manual"))),
+			lastFetchedAt: v.optional(v.number()),
 			userId: v.id("users"),
 			createdAt: v.number(),
 			updatedAt: v.optional(v.number()),

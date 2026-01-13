@@ -1,5 +1,7 @@
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
+import { internalQuery } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 /**
  * Gets the authenticated user from the database.
@@ -77,3 +79,37 @@ export async function requireAuthUser(
 	}
 	return user;
 }
+
+/**
+ * Internal query to get user by token identifier.
+ * Used by actions that can't access the database directly.
+ */
+export const getUserByTokenIdentifier = internalQuery({
+	args: {
+		tokenIdentifier: v.string(),
+	},
+	returns: v.union(
+		v.object({
+			_id: v.id("users"),
+			email: v.string(),
+			name: v.optional(v.string()),
+		}),
+		v.null(),
+	),
+	handler: async (ctx, args) => {
+		const user = await ctx.db
+			.query("users")
+			.withIndex("by_token", (q) => q.eq("tokenIdentifier", args.tokenIdentifier))
+			.unique();
+
+		if (!user) {
+			return null;
+		}
+
+		return {
+			_id: user._id,
+			email: user.email,
+			name: user.name,
+		};
+	},
+});

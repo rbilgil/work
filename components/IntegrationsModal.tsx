@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import {
 	Check,
 	ExternalLink,
+	FileText,
 	GitBranch,
 	Github,
 	Key,
@@ -40,6 +41,8 @@ export default function IntegrationsModal({
 }: IntegrationsModalProps) {
 	const [cursorApiKey, setCursorApiKey] = useState("");
 	const [savingCursor, setSavingCursor] = useState(false);
+	const [notionApiToken, setNotionApiToken] = useState("");
+	const [savingNotion, setSavingNotion] = useState(false);
 	const [selectedRepo, setSelectedRepo] = useState<{
 		owner: string;
 		name: string;
@@ -59,6 +62,7 @@ export default function IntegrationsModal({
 	);
 
 	const saveCursorApiKey = useMutation(api.integrations.saveCursorApiKey);
+	const saveNotionApiToken = useMutation(api.integrations.saveNotionApiToken);
 	const removeIntegration = useMutation(api.integrations.removeIntegration);
 	const connectRepo = useMutation(api.integrations.connectRepoToWorkspace);
 	const disconnectRepo = useMutation(api.integrations.disconnectRepo);
@@ -108,6 +112,22 @@ export default function IntegrationsModal({
 	const handleRemoveCursor = async () => {
 		if (!organizationId) return;
 		await removeIntegration({ organizationId, type: "cursor" });
+	};
+
+	const handleSaveNotionToken = async () => {
+		if (!organizationId || !notionApiToken.trim()) return;
+		setSavingNotion(true);
+		try {
+			await saveNotionApiToken({ organizationId, apiToken: notionApiToken.trim() });
+			setNotionApiToken("");
+		} finally {
+			setSavingNotion(false);
+		}
+	};
+
+	const handleRemoveNotion = async () => {
+		if (!organizationId) return;
+		await removeIntegration({ organizationId, type: "notion" });
 	};
 
 	const handleConnectGitHub = async () => {
@@ -227,6 +247,73 @@ export default function IntegrationsModal({
 								Get your API key from Cursor
 								<ExternalLink className="w-3 h-3" />
 							</a>
+						</div>
+
+						<Separator />
+
+						{/* Notion Integration */}
+						<div className="flex flex-col gap-3">
+							<div className="flex items-center gap-2">
+								<FileText className="w-5 h-5 text-slate-700" />
+								<h3 className="font-medium">Notion</h3>
+								{integrations?.notion.connected && (
+									<span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full">
+										<Check className="w-3 h-3" /> Connected
+									</span>
+								)}
+							</div>
+							<p className="text-sm text-slate-500">
+								Connect Notion to automatically fetch document content when
+								sharing Notion links.
+							</p>
+							{integrations?.notion.connected ? (
+								<div className="flex items-center gap-2">
+									<span className="text-sm text-slate-500">
+										Integration token saved
+									</span>
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={handleRemoveNotion}
+									>
+										<Unlink className="w-4 h-4 mr-1" />
+										Disconnect
+									</Button>
+								</div>
+							) : (
+								<div className="flex gap-2">
+									<Input
+										type="password"
+										value={notionApiToken}
+										onChange={(e) => setNotionApiToken(e.target.value)}
+										placeholder="Enter your Notion integration token"
+										className="flex-1"
+									/>
+									<Button
+										onClick={handleSaveNotionToken}
+										disabled={!notionApiToken.trim() || savingNotion}
+									>
+										{savingNotion ? (
+											<Loader2 className="w-4 h-4 animate-spin" />
+										) : (
+											"Save"
+										)}
+									</Button>
+								</div>
+							)}
+							<a
+								href="https://www.notion.so/my-integrations"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="text-sm text-blue-500 hover:underline flex items-center gap-1"
+							>
+								Create a Notion integration
+								<ExternalLink className="w-3 h-3" />
+							</a>
+							<p className="text-xs text-slate-400">
+								After creating an integration, share your Notion pages with it
+								to enable content fetching.
+							</p>
 						</div>
 
 						<Separator />
