@@ -99,6 +99,78 @@ export const generateMcpToken = mutation({
 });
 
 /**
+ * Generate an MCP access token for internal use (e.g., by background agents)
+ * This allows agents to generate tokens without a user session
+ */
+export const generateMcpTokenInternal = internalMutation({
+	args: {
+		todoId: v.id("workspace_todos"),
+		userId: v.id("users"),
+	},
+	returns: v.object({
+		token: v.string(),
+		expiresAt: v.string(),
+		mcpUrl: v.string(),
+	}),
+	handler: async (ctx, args) => {
+		// Get the todo
+		const todo = await ctx.db.get(args.todoId);
+		if (!todo) {
+			throw new Error("Task not found");
+		}
+
+		// Get workspace
+		const workspace = await ctx.db.get(todo.workspaceId);
+		if (!workspace) {
+			throw new Error("Workspace not found");
+		}
+
+		// Revoke any existing tokens for this todo
+		const existingTokens = await ctx.db
+			.query("mcp_access_tokens")
+			.withIndex("by_todo", (q) => q.eq("todoId", args.todoId))
+			.collect();
+
+		for (const token of existingTokens) {
+			if (!token.revokedAt) {
+				await ctx.db.patch(token._id, { revokedAt: new Date().toISOString() });
+			}
+		}
+
+		// Generate a new token (32 random bytes as hex)
+		const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
+		const token = Array.from(tokenBytes)
+			.map((b) => b.toString(16).padStart(2, "0"))
+			.join("");
+
+		// Token expires in 2 hours (longer for background agents)
+		const now = new Date();
+		const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+		// Store the token
+		await ctx.db.insert("mcp_access_tokens", {
+			todoId: args.todoId,
+			workspaceId: todo.workspaceId,
+			organizationId: workspace.organizationId,
+			token,
+			createdByUserId: args.userId,
+			createdAt: now.toISOString(),
+			expiresAt: expiresAt.toISOString(),
+		});
+
+		// Build the MCP URL
+		const convexUrl = process.env.CONVEX_SITE_URL;
+		const mcpUrl = `${convexUrl}/mcp?token=${token}`;
+
+		return {
+			token,
+			expiresAt: expiresAt.toISOString(),
+			mcpUrl,
+		};
+	},
+});
+
+/**
  * Revoke an MCP token
  */
 export const revokeMcpToken = mutation({

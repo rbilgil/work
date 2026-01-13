@@ -3,7 +3,7 @@
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 
 // Cursor API base URL
 const CURSOR_API_BASE = "https://api.cursor.com";
@@ -27,16 +27,6 @@ export const startCursorAgent = action({
 		error?: string;
 		agentRunId?: Id<"agent_runs">;
 	}> => {
-		// Get the todo with full context
-		const contextData = await ctx.runQuery(
-			internal.todoContext.getFullContextForAgent,
-			{ todoId: args.todoId },
-		);
-
-		if (!contextData) {
-			return { success: false, error: "Todo not found" };
-		}
-
 		// Get user ID from the todo
 		const todoData = await ctx.runQuery(
 			internal.agentExecutionMutations.getTodoInternal,
@@ -73,8 +63,36 @@ export const startCursorAgent = action({
 			};
 		}
 
-		// Build the prompt for Cursor
-		const prompt = buildAgentPrompt(contextData);
+		// Get workspace info for the prompt
+		const workspaceInfo = await ctx.runQuery(
+			internal.workspaces.getWorkspaceInternal,
+			{ id: todoData.workspaceId },
+		);
+
+		// Generate MCP token for task context access
+		const mcpToken = await ctx.runMutation(
+			internal.mcp.generateMcpTokenInternal,
+			{
+				todoId: args.todoId,
+				userId: todoData.userId,
+			},
+		);
+
+		// Build the prompt for Cursor with MCP URL
+		const prompt = buildAgentPrompt({
+			todo: {
+				id: args.todoId,
+				title: todoData.title,
+				description: todoData.description,
+				agentPrompt: todoData.agentPrompt,
+				plan: todoData.plan,
+			},
+			workspace: {
+				name: workspaceInfo?.name || "Unknown",
+				description: workspaceInfo?.description,
+			},
+			mcpUrl: mcpToken.mcpUrl,
+		});
 
 		// Get the Convex deployment URL for webhooks
 		const convexUrl = process.env.CONVEX_SITE_URL || process.env.CONVEX_URL;
@@ -177,25 +195,6 @@ export const startCursorPlanningAgent = action({
 		console.log("[CURSOR-PLANNING] Todo ID:", args.todoId);
 		console.log("-".repeat(50));
 
-		// Get the todo with full context
-		console.log("[CURSOR-PLANNING] Fetching todo context...");
-		const contextData = await ctx.runQuery(
-			internal.todoContext.getFullContextForAgent,
-			{ todoId: args.todoId },
-		);
-
-		if (!contextData) {
-			console.log("[CURSOR-PLANNING] ERROR: Todo not found");
-			return { success: false, error: "Todo not found" };
-		}
-		console.log("[CURSOR-PLANNING] Context fetched:", {
-			todoTitle: contextData.todo.title,
-			workspace: contextData.workspace.name,
-			hasDocsContext: !!contextData.context.docs,
-			hasMessagesContext: !!contextData.context.messages,
-			hasLinksContext: !!contextData.context.links,
-		});
-
 		// Get user ID from the todo
 		console.log("[CURSOR-PLANNING] Checking integrations...");
 		const todoData = await ctx.runQuery(
@@ -238,9 +237,38 @@ export const startCursorPlanningAgent = action({
 		}
 		console.log("[CURSOR-PLANNING] Repository:", `${repoData.owner}/${repoData.repo}`, "branch:", repoData.defaultBranch);
 
-		// Build the prompt for Cursor - planning mode
+		// Get workspace info for the prompt
+		const workspaceInfo = await ctx.runQuery(
+			internal.workspaces.getWorkspaceInternal,
+			{ id: todoData.workspaceId },
+		);
+
+		// Generate MCP token for task context access
+		console.log("[CURSOR-PLANNING] Generating MCP token...");
+		const mcpToken = await ctx.runMutation(
+			internal.mcp.generateMcpTokenInternal,
+			{
+				todoId: args.todoId,
+				userId: todoData.userId,
+			},
+		);
+		console.log("[CURSOR-PLANNING] MCP token generated, URL:", mcpToken.mcpUrl);
+
+		// Build the prompt for Cursor - planning mode with MCP URL
 		console.log("[CURSOR-PLANNING] Building planning prompt...");
-		const prompt = buildPlanningPrompt(contextData);
+		const prompt = buildPlanningPrompt({
+			todo: {
+				id: args.todoId,
+				title: todoData.title,
+				description: todoData.description,
+				agentPrompt: todoData.agentPrompt,
+			},
+			workspace: {
+				name: workspaceInfo?.name || "Unknown",
+				description: workspaceInfo?.description,
+			},
+			mcpUrl: mcpToken.mcpUrl,
+		});
 		console.log("[CURSOR-PLANNING] Prompt built. Length:", prompt.length, "chars");
 		console.log("[CURSOR-PLANNING] === PROMPT START ===");
 		console.log(prompt);
@@ -349,9 +377,9 @@ export const startCursorPlanningAgent = action({
 });
 
 /**
- * Build a planning prompt for the Cursor agent
+ * Build a planning prompt for the Cursor agent using MCP-based context exploration
  */
-function buildPlanningPrompt(contextData: {
+function buildPlanningPrompt(data: {
 	todo: {
 		id: Id<"workspace_todos">;
 		title: string;
@@ -362,57 +390,64 @@ function buildPlanningPrompt(contextData: {
 		name: string;
 		description?: string;
 	};
-	context: {
-		docs: string;
-		messages: string;
-		links: string;
-	};
+	mcpUrl: string;
 }): string {
 	const sections: string[] = [];
 
-	sections.push(`# Task Analysis Request: ${contextData.todo.title}`);
+	sections.push(`# Task Analysis Request: ${data.todo.title}`);
 
-	if (contextData.todo.description) {
-		sections.push(`## Description\n${contextData.todo.description}`);
+	if (data.todo.description) {
+		sections.push(`## Description\n${data.todo.description}`);
 	}
 
-	if (contextData.todo.agentPrompt) {
-		sections.push(`## Additional Context\n${contextData.todo.agentPrompt}`);
+	if (data.todo.agentPrompt) {
+		sections.push(`## Additional Context\n${data.todo.agentPrompt}`);
 	}
 
 	sections.push(
-		`## Workspace: ${contextData.workspace.name}`,
-		contextData.workspace.description
-			? `${contextData.workspace.description}`
-			: "",
+		`## Workspace: ${data.workspace.name}`,
+		data.workspace.description ? `${data.workspace.description}` : "",
 	);
 
-	if (contextData.context.docs) {
-		sections.push(`## Related Documentation\n${contextData.context.docs}`);
-	}
-
-	if (contextData.context.messages) {
-		sections.push(
-			`## Relevant Conversations\n${contextData.context.messages}`,
-		);
-	}
-
-	if (contextData.context.links) {
-		sections.push(`## Reference Links\n${contextData.context.links}`);
-	}
-
 	sections.push(`
+## Context Exploration (CRITICAL)
+
+You have access to a task-scoped MCP server providing dynamic access to workspace context including chat history, documents, and reference links.
+
+**MCP Server URL:** ${data.mcpUrl}
+
+### Before creating your plan, you MUST:
+
+1. **List available resources** to see what context is available (chat history, documents, links)
+2. **Read the chat history** (\`whirl://chat\`) to understand the full conversation and user requirements
+3. **Read any linked documents** (\`whirl://docs\`) that provide relevant specifications or context
+4. **Search the context** using the \`search_context\` tool for keywords related to this task
+5. **Review external links** (\`whirl://links\`) for any referenced designs, specs, or examples
+
+The MCP server provides these resources:
+- \`whirl://task\` - Task details and description
+- \`whirl://workspace\` - Workspace information
+- \`whirl://chat\` - Full chat history with user conversations
+- \`whirl://docs\` - Linked documents and specifications
+- \`whirl://links\` - External reference links
+
+And these tools:
+- \`search_context\` - Search across all context (messages, docs, links)
+
+**Do not skip this step.** The context contains important requirements and discussions that inform the implementation plan.
+
 ## Your Task
 
-Analyze the codebase and create a detailed implementation plan for this task. DO NOT make any code changes or create a PR.
+After exploring the context via MCP, analyze the codebase and create a detailed implementation plan for this task. DO NOT make any code changes or create a PR.
 
 Your response should include:
 
-1. **Approach** - Your strategy for implementing this feature
-2. **Files to Change** - List the specific files that need to be modified or created
-3. **Implementation Steps** - Concrete steps to implement this, with code snippets where helpful
-4. **Edge Cases** - Important edge cases to handle
-5. **Testing** - How to verify the implementation works
+1. **Codebase Analysis** - Summary of what you learned from exploring the MCP context
+2. **Approach** - Your strategy for implementing this feature
+3. **Files to Change** - List the specific files that need to be modified or created
+4. **Implementation Steps** - Concrete steps to implement this, with code snippets where helpful
+5. **Edge Cases** - Important edge cases to handle
+6. **Testing** - How to verify the implementation works
 
 Keep your plan focused and actionable. No corporate jargon or filler. Write like a senior engineer explaining the plan to a colleague.
 `);
@@ -421,60 +456,73 @@ Keep your plan focused and actionable. No corporate jargon or filler. Write like
 }
 
 /**
- * Build a comprehensive prompt for the Cursor agent
+ * Build a comprehensive prompt for the Cursor agent using MCP-based context exploration
  */
-function buildAgentPrompt(contextData: {
+function buildAgentPrompt(data: {
 	todo: {
 		id: Id<"workspace_todos">;
 		title: string;
 		description?: string;
 		agentPrompt?: string;
+		plan?: string;
 	};
 	workspace: {
 		name: string;
 		description?: string;
 	};
-	context: {
-		docs: string;
-		messages: string;
-		links: string;
-	};
+	mcpUrl: string;
 }): string {
 	const sections: string[] = [];
 
-	sections.push(`# Task: ${contextData.todo.title}`);
+	sections.push(`# Task: ${data.todo.title}`);
 
-	if (contextData.todo.description) {
-		sections.push(`## Description\n${contextData.todo.description}`);
+	if (data.todo.description) {
+		sections.push(`## Description\n${data.todo.description}`);
 	}
 
-	if (contextData.todo.agentPrompt) {
-		sections.push(`## Agent Instructions\n${contextData.todo.agentPrompt}`);
+	if (data.todo.agentPrompt) {
+		sections.push(`## Agent Instructions\n${data.todo.agentPrompt}`);
 	}
 
 	sections.push(
-		`## Workspace: ${contextData.workspace.name}`,
-		contextData.workspace.description
-			? `${contextData.workspace.description}`
-			: "",
+		`## Workspace: ${data.workspace.name}`,
+		data.workspace.description ? `${data.workspace.description}` : "",
 	);
 
-	if (contextData.context.docs) {
-		sections.push(`## Related Documentation\n${contextData.context.docs}`);
-	}
-
-	if (contextData.context.messages) {
-		sections.push(
-			`## Relevant Conversations\n${contextData.context.messages}`,
-		);
-	}
-
-	if (contextData.context.links) {
-		sections.push(`## Reference Links\n${contextData.context.links}`);
+	// Include the implementation plan if available
+	if (data.todo.plan) {
+		sections.push(`## Implementation Plan\n${data.todo.plan}`);
 	}
 
 	sections.push(`
+## Context Exploration (IMPORTANT)
+
+You have access to a task-scoped MCP server providing dynamic access to workspace context including chat history, documents, and reference links.
+
+**MCP Server URL:** ${data.mcpUrl}
+
+### Before implementing, you SHOULD:
+
+1. **List available resources** to see what context is available
+2. **Read the chat history** (\`whirl://chat\`) to understand user requirements and discussions
+3. **Read any linked documents** (\`whirl://docs\`) for specifications or context
+4. **Search the context** using the \`search_context\` tool for relevant keywords
+
+The MCP server provides these resources:
+- \`whirl://task\` - Task details and description
+- \`whirl://workspace\` - Workspace information
+- \`whirl://chat\` - Full chat history with user conversations
+- \`whirl://docs\` - Linked documents and specifications
+- \`whirl://links\` - External reference links
+
+And these tools:
+- \`search_context\` - Search across all context (messages, docs, links)
+- \`update_task_status\` - Update the task status (in_progress, in_review, done)
+- \`add_comment\` - Post updates to the workspace chat
+- \`mark_complete\` - Mark task as complete with a summary
+
 ## Instructions
+
 Please implement this task following best practices:
 1. Write clean, well-documented code
 2. Include appropriate tests if applicable

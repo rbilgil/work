@@ -39,6 +39,10 @@ export const getTodoInternal = internalQuery({
 			userId: todo.userId,
 			workspaceId: todo.workspaceId,
 			status: todo.status,
+			title: todo.title,
+			description: todo.description,
+			agentPrompt: todo.agentPrompt,
+			plan: todo.plan,
 		};
 	},
 });
