@@ -12,14 +12,13 @@ import { api } from "../../convex/_generated/api";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
 	const [settingsOpen, setSettingsOpen] = useState(false);
 
-	// Get user's organizations to pass the current one to integrations
 	const organizations = useQuery(api.organizations.listMyOrganizations);
 	const currentOrganization = organizations?.[0];
 
 	return (
-		<div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
-			{/* App Header */}
-			<header className="h-14 border-b border-slate-200/70 dark:border-white/10 bg-white dark:bg-slate-950 flex items-center justify-between px-4 sticky top-0 z-50">
+		<div className="grid grid-rows-[56px_1fr] h-screen">
+			{/* Header */}
+			<header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex items-center justify-between px-4">
 				<Link href="/app" className="flex items-center gap-2">
 					<div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center">
 						<Tornado className="w-4 h-4 text-white" />
@@ -30,7 +29,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 				</Link>
 
 				<div className="flex items-center gap-2">
-					{/* Show current organization name */}
 					{currentOrganization && (
 						<span className="text-sm text-slate-500 dark:text-slate-400 mr-2">
 							{currentOrganization.name}
@@ -62,10 +60,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 				</div>
 			</header>
 
-			{/* App Content */}
-			<main className="flex-1">{children}</main>
+			{/* Main Content */}
+			<main className="overflow-hidden">{children}</main>
 
-			{/* Global Settings/Integrations Modal */}
 			<IntegrationsModal
 				open={settingsOpen}
 				onOpenChange={setSettingsOpen}

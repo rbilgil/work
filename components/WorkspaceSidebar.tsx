@@ -23,9 +23,9 @@ export default function WorkspaceSidebar({
 	});
 
 	return (
-		<div className="w-64 flex-shrink-0 border-r border-slate-200/70 dark:border-white/10 p-4 flex flex-col gap-4 h-full bg-slate-50/50 dark:bg-slate-900/50">
+		<div className="p-4 flex flex-col gap-4 h-full bg-slate-50 dark:bg-slate-900">
 			<div className="flex items-center justify-between">
-				<h2 className="text-sm font-semibold opacity-70 uppercase tracking-wider">
+				<h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
 					Workspaces
 				</h2>
 				<Button
@@ -47,7 +47,7 @@ export default function WorkspaceSidebar({
 						className={cn(
 							"justify-start gap-2 font-normal",
 							selectedWorkspaceId === workspace._id &&
-								"bg-slate-200/70 dark:bg-white/10 font-medium",
+								"bg-slate-200 dark:bg-slate-800 font-medium",
 						)}
 						onClick={() => onSelectWorkspace(workspace._id)}
 					>

@@ -69,7 +69,7 @@ export default function ContextSidebar({
 		) ?? [];
 
 	return (
-		<div className="w-72 flex-shrink-0 border-l border-slate-200/70 dark:border-white/10 bg-slate-50/50 dark:bg-slate-900/50 overflow-y-auto">
+		<div className="h-full bg-slate-50 dark:bg-slate-900 overflow-y-auto">
 			<div className="p-4">
 				<div className="flex items-center justify-between mb-4">
 					<h2 className="text-sm font-semibold opacity-70 uppercase tracking-wider">

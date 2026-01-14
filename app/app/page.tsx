@@ -39,45 +39,37 @@ export default function Work() {
 	const [viewMode, setViewMode] = useState<ViewMode>("chat");
 	const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
 
-	// Get user's organizations
 	const organizations = useQuery(api.organizations.listMyOrganizations);
-
-	// Use the first organization
 	const currentOrganization = organizations?.[0];
 
-	// Get workspaces for the current organization
 	const workspaces = useQuery(
 		api.workspaces.listWorkspaces,
 		currentOrganization ? { organizationId: currentOrganization._id } : "skip",
 	);
 
-	// Auto-select first workspace
 	useEffect(() => {
 		if (selectedWorkspaceId === null && workspaces && workspaces.length > 0) {
 			setSelectedWorkspaceId(workspaces[0]._id);
 		}
 	}, [workspaces, selectedWorkspaceId]);
 
-	// Close thread panel when switching to board view
 	useEffect(() => {
 		if (viewMode === "board") {
 			setThreadMessageId(null);
 		}
 	}, [viewMode]);
 
-	// Show loading while fetching organizations
 	if (organizations === undefined) {
 		return (
-			<div className="flex h-[calc(100vh-5rem)] items-center justify-center">
+			<div className="h-full flex items-center justify-center">
 				<Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
 			</div>
 		);
 	}
 
-	// No organization - user needs to complete onboarding
 	if (!currentOrganization) {
 		return (
-			<div className="flex h-[calc(100vh-5rem)] items-center justify-center">
+			<div className="h-full flex items-center justify-center">
 				<div className="text-center">
 					<p className="text-lg text-slate-700 dark:text-slate-300 mb-4">
 						Please complete onboarding first.
@@ -94,27 +86,29 @@ export default function Work() {
 	}
 
 	return (
-		<div className="flex h-[calc(100vh-3.5rem)] border-t border-slate-200/70 dark:border-white/10 overflow-hidden bg-white dark:bg-slate-950">
-			{/* Left Sidebar - Workspace List */}
-			<WorkspaceSidebar
-				organizationId={currentOrganization._id}
-				selectedWorkspaceId={selectedWorkspaceId}
-				onSelectWorkspace={setSelectedWorkspaceId}
-				onNewWorkspace={() => setCreateWorkspaceOpen(true)}
-			/>
+		<div className="h-full grid grid-cols-[220px_1fr_260px] bg-white dark:bg-slate-950">
+			{/* Left Sidebar */}
+			<div className="border-r border-slate-200 dark:border-slate-800 overflow-y-auto">
+				<WorkspaceSidebar
+					organizationId={currentOrganization._id}
+					selectedWorkspaceId={selectedWorkspaceId}
+					onSelectWorkspace={setSelectedWorkspaceId}
+					onNewWorkspace={() => setCreateWorkspaceOpen(true)}
+				/>
+			</div>
 
-			{/* Main Area */}
-			<div className="flex-1 flex flex-col min-w-0 relative">
+			{/* Main Content */}
+			<div className="flex flex-col overflow-hidden">
 				{selectedWorkspaceId ? (
 					<>
-						{/* View Toggle Header */}
-						<div className="flex items-center justify-between px-4 py-2 border-b border-slate-200/70 dark:border-white/10 bg-slate-50/50 dark:bg-slate-900/50">
-							<div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+						{/* View Toggle */}
+						<div className="flex items-center gap-2 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+							<div className="flex items-center gap-1 bg-slate-200 dark:bg-slate-800 rounded-lg p-1">
 								<button
 									type="button"
 									onClick={() => setViewMode("chat")}
 									className={cn(
-										"flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors",
+										"flex items-center gap-2 px-3 py-1.5 rounded-md text-sm",
 										viewMode === "chat"
 											? "bg-white dark:bg-slate-700 shadow-sm font-medium"
 											: "hover:bg-white/50 dark:hover:bg-white/10",
@@ -127,7 +121,7 @@ export default function Work() {
 									type="button"
 									onClick={() => setViewMode("board")}
 									className={cn(
-										"flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors",
+										"flex items-center gap-2 px-3 py-1.5 rounded-md text-sm",
 										viewMode === "board"
 											? "bg-white dark:bg-slate-700 shadow-sm font-medium"
 											: "hover:bg-white/50 dark:hover:bg-white/10",
@@ -139,27 +133,28 @@ export default function Work() {
 							</div>
 						</div>
 
-						{/* Content Area */}
-						{viewMode === "chat" ? (
-							<MessageArea
-								workspaceId={selectedWorkspaceId}
-								onOpenThread={setThreadMessageId}
-							/>
-						) : (
-							<KanbanBoard
-								workspaceId={selectedWorkspaceId}
-								onTaskClick={(todo) => setSelectedTodo(todo)}
-							/>
-						)}
+						{/* Content */}
+						<div className="flex-1 overflow-hidden relative">
+							{viewMode === "chat" ? (
+								<MessageArea
+									workspaceId={selectedWorkspaceId}
+									onOpenThread={setThreadMessageId}
+								/>
+							) : (
+								<KanbanBoard
+									workspaceId={selectedWorkspaceId}
+									onTaskClick={(todo) => setSelectedTodo(todo)}
+								/>
+							)}
 
-						{/* Thread Panel (slides over from right, only in chat view) */}
-						{threadMessageId && viewMode === "chat" && (
-							<ThreadPanel
-								messageId={threadMessageId}
-								workspaceId={selectedWorkspaceId}
-								onClose={() => setThreadMessageId(null)}
-							/>
-						)}
+							{threadMessageId && viewMode === "chat" && (
+								<ThreadPanel
+									messageId={threadMessageId}
+									workspaceId={selectedWorkspaceId}
+									onClose={() => setThreadMessageId(null)}
+								/>
+							)}
+						</div>
 					</>
 				) : (
 					<div className="flex-1 flex items-center justify-center text-slate-500">
@@ -173,14 +168,18 @@ export default function Work() {
 				)}
 			</div>
 
-			{/* Right Sidebar - Context (Docs, Todos, Links) */}
-			{selectedWorkspaceId && (
-				<ContextSidebar
-					organizationId={currentOrganization._id}
-					workspaceId={selectedWorkspaceId}
-					onTaskClick={(todo) => setSelectedTodo(todo)}
-					onGoToBoard={() => setViewMode("board")}
-				/>
+			{/* Right Sidebar */}
+			{selectedWorkspaceId ? (
+				<div className="border-l border-slate-200 dark:border-slate-800 overflow-y-auto">
+					<ContextSidebar
+						organizationId={currentOrganization._id}
+						workspaceId={selectedWorkspaceId}
+						onTaskClick={(todo) => setSelectedTodo(todo)}
+						onGoToBoard={() => setViewMode("board")}
+					/>
+				</div>
+			) : (
+				<div className="border-l border-slate-200 dark:border-slate-800" />
 			)}
 
 			{/* Modals */}
