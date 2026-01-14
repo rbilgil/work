@@ -370,6 +370,16 @@ export const createMessage = mutation({
 			}
 		}
 
+		// Sync message to Slack if workspace has linked channel
+		await ctx.scheduler.runAfter(0, internal.slack.syncMessageToSlack, {
+			messageId,
+			workspaceId: args.workspaceId,
+			content: args.content,
+			userName: user.name || user.email || "User",
+			userId: user._id,
+			parentMessageId: args.parentMessageId, // For thread replies
+		});
+
 		return messageId;
 	},
 });
@@ -387,6 +397,22 @@ export const listMessages = query({
 			createdAt: v.number(),
 			updatedAt: v.optional(v.number()),
 			replyCount: v.number(),
+			// Slack sync fields
+			slackMessageTs: v.optional(v.string()),
+			slackUserId: v.optional(v.string()),
+			fromSlack: v.optional(v.boolean()),
+			slackUserName: v.optional(v.string()),
+			// Author info
+			authorName: v.optional(v.string()),
+			// Thread info (repliers)
+			repliers: v.array(
+				v.object({
+					userId: v.id("users"),
+					name: v.optional(v.string()),
+					slackUserName: v.optional(v.string()),
+				}),
+			),
+			lastReplyAt: v.optional(v.number()),
 		}),
 	),
 	handler: async (ctx, args) => {
@@ -408,15 +434,54 @@ export const listMessages = query({
 			.order("asc")
 			.collect();
 
-		// Filter to top-level only and add reply counts
+		// Filter to top-level only and add reply counts + replier info
 		const topLevel = messages.filter((m) => !m.parentMessageId);
 		return await Promise.all(
 			topLevel.map(async (msg) => {
 				const replies = await ctx.db
 					.query("workspace_messages")
 					.withIndex("by_parent", (q) => q.eq("parentMessageId", msg._id))
+					.order("asc")
 					.collect();
-				return { ...msg, replyCount: replies.length };
+
+				// Get author info
+				const author = await ctx.db.get(msg.userId);
+				const authorName = msg.fromSlack
+					? msg.slackUserName
+					: author?.name || author?.email;
+
+				// Get unique repliers (up to 3 for display)
+				const uniqueReplierIds = [
+					...new Set(replies.map((r) => r.userId.toString())),
+				].slice(0, 3);
+				const repliers = await Promise.all(
+					uniqueReplierIds.map(async (userIdStr) => {
+						const reply = replies.find((r) => r.userId.toString() === userIdStr);
+						const replierUser = await ctx.db.get(
+							reply!.userId as Id<"users">,
+						);
+						return {
+							userId: reply!.userId,
+							name: reply!.fromSlack
+								? undefined
+								: replierUser?.name || replierUser?.email,
+							slackUserName: reply!.slackUserName,
+						};
+					}),
+				);
+
+				// Get last reply timestamp
+				const lastReply = replies[replies.length - 1];
+
+				return {
+					...msg,
+					replyCount: replies.length,
+					fromSlack: msg.fromSlack,
+					slackUserName: msg.slackUserName,
+					authorName,
+					repliers,
+					lastReplyAt: lastReply?.createdAt,
+				};
 			}),
 		);
 	},
@@ -434,6 +499,11 @@ export const listReplies = query({
 			userId: v.id("users"),
 			createdAt: v.number(),
 			updatedAt: v.optional(v.number()),
+			// Slack sync fields
+			slackMessageTs: v.optional(v.string()),
+			slackUserId: v.optional(v.string()),
+			fromSlack: v.optional(v.boolean()),
+			slackUserName: v.optional(v.string()),
 		}),
 	),
 	handler: async (ctx, args) => {

@@ -1,14 +1,16 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import {
 	Check,
 	ExternalLink,
 	FileText,
 	GitBranch,
 	Github,
+	Hash,
 	Key,
 	Loader2,
+	MessageSquare,
 	Unlink,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -49,6 +51,12 @@ export default function IntegrationsModal({
 		defaultBranch: string;
 	} | null>(null);
 	const [savingRepo, setSavingRepo] = useState(false);
+	const [slackChannels, setSlackChannels] = useState<
+		Array<{ id: string; name: string; isPrivate: boolean; memberCount: number }>
+	>([]);
+	const [loadingChannels, setLoadingChannels] = useState(false);
+	const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+	const [savingChannel, setSavingChannel] = useState(false);
 
 	// Integrations are now organization-scoped
 	const integrations = useQuery(
@@ -69,6 +77,21 @@ export default function IntegrationsModal({
 	const initiateNotionOAuth = useMutation(api.integrations.initiateNotionOAuth);
 	const saveNotionApiKey = useMutation(api.integrations.saveNotionApiKey);
 
+	// Slack integration
+	const slackConnection = useQuery(
+		api.slack.getSlackConnection,
+		organizationId ? { organizationId } : "skip",
+	);
+	const linkedSlackChannel = useQuery(
+		api.slack.getLinkedSlackChannel,
+		workspaceId ? { workspaceId } : "skip",
+	);
+	const initiateSlackOAuth = useMutation(api.slack.initiateSlackOAuth);
+	const removeSlackIntegration = useMutation(api.slack.removeSlackIntegration);
+	const fetchSlackChannels = useAction(api.slack.fetchSlackChannels);
+	const linkSlackChannel = useMutation(api.slack.linkSlackChannel);
+	const unlinkSlackChannel = useMutation(api.slack.unlinkSlackChannel);
+
 	// Handle OAuth callbacks (success/error messages only - tokens are stored server-side)
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
@@ -76,14 +99,18 @@ export default function IntegrationsModal({
 		const githubError = params.get("github_error");
 		const notionConnected = params.get("notion_connected");
 		const notionError = params.get("notion_error");
+		const slackConnected = params.get("slack_connected");
+		const slackError = params.get("slack_error");
 
-		if (githubConnected === "true" || githubError || notionConnected === "true" || notionError) {
+		if (githubConnected === "true" || githubError || notionConnected === "true" || notionError || slackConnected === "true" || slackError) {
 			// Clean up URL params
 			const newUrl = new URL(window.location.href);
 			newUrl.searchParams.delete("github_connected");
 			newUrl.searchParams.delete("github_error");
 			newUrl.searchParams.delete("notion_connected");
 			newUrl.searchParams.delete("notion_error");
+			newUrl.searchParams.delete("slack_connected");
+			newUrl.searchParams.delete("slack_error");
 			window.history.replaceState({}, "", newUrl.toString());
 
 			if (githubError) {
@@ -91,6 +118,9 @@ export default function IntegrationsModal({
 			}
 			if (notionError) {
 				alert(`Notion connection failed: ${notionError}`);
+			}
+			if (slackError) {
+				alert(`Slack connection failed: ${slackError}`);
 			}
 		}
 	}, []);
@@ -188,10 +218,64 @@ export default function IntegrationsModal({
 		setSelectedRepo(null);
 	};
 
+	const handleConnectSlack = async () => {
+		if (!organizationId) return;
+		try {
+			const { authUrl } = await initiateSlackOAuth({ organizationId });
+			window.location.href = authUrl;
+		} catch (error) {
+			console.error("Failed to initiate Slack OAuth:", error);
+			alert("Failed to initiate Slack connection. Please try again.");
+		}
+	};
+
+	const handleDisconnectSlack = async () => {
+		if (!organizationId) return;
+		await removeSlackIntegration({ organizationId });
+		setSlackChannels([]);
+		setSelectedChannelId(null);
+	};
+
+	const handleLoadSlackChannels = async () => {
+		if (!organizationId) return;
+		setLoadingChannels(true);
+		try {
+			const channels = await fetchSlackChannels({ organizationId });
+			setSlackChannels(channels);
+		} catch (error) {
+			console.error("Failed to load Slack channels:", error);
+			alert("Failed to load Slack channels. Please try again.");
+		} finally {
+			setLoadingChannels(false);
+		}
+	};
+
+	const handleLinkSlackChannel = async () => {
+		if (!workspaceId || !selectedChannelId) return;
+		const channel = slackChannels.find((c) => c.id === selectedChannelId);
+		if (!channel) return;
+		setSavingChannel(true);
+		try {
+			await linkSlackChannel({
+				workspaceId,
+				slackChannelId: channel.id,
+				slackChannelName: channel.name,
+			});
+			setSelectedChannelId(null);
+		} finally {
+			setSavingChannel(false);
+		}
+	};
+
+	const handleUnlinkSlackChannel = async () => {
+		if (!workspaceId) return;
+		await unlinkSlackChannel({ workspaceId });
+	};
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-lg">
-				<DialogHeader>
+			<DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
+				<DialogHeader className="shrink-0">
 					<DialogTitle>Integrations</DialogTitle>
 					<DialogDescription>
 						Connect your accounts to enable AI agent features.
@@ -209,7 +293,7 @@ export default function IntegrationsModal({
 						</p>
 					</div>
 				) : (
-					<div className="flex flex-col gap-6 pt-2">
+					<div className="flex flex-col gap-6 pt-2 overflow-y-auto flex-1 pr-2">
 						{/* Cursor Integration */}
 						<div className="flex flex-col gap-3">
 							<div className="flex items-center gap-2">
@@ -382,6 +466,125 @@ export default function IntegrationsModal({
 							)}
 						</div>
 
+						<Separator />
+
+						{/* Slack Integration */}
+						<div className="flex flex-col gap-3">
+							<div className="flex items-center gap-2">
+								<MessageSquare className="w-5 h-5 text-purple-500" />
+								<h3 className="font-medium">Slack</h3>
+								{slackConnection?.connected && (
+									<span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full">
+										<Check className="w-3 h-3" /> Connected
+									</span>
+								)}
+							</div>
+							<p className="text-sm text-slate-500">
+								Connect Slack to sync workspace chat with a Slack channel.
+							</p>
+							{slackConnection?.connected ? (
+								<div className="flex items-center gap-2">
+									<span className="text-sm">
+										Connected to{" "}
+										<span className="font-medium">{slackConnection.teamName}</span>
+									</span>
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={handleDisconnectSlack}
+									>
+										<Unlink className="w-4 h-4 mr-1" />
+										Disconnect
+									</Button>
+								</div>
+							) : (
+								<Button onClick={handleConnectSlack} variant="outline">
+									<MessageSquare className="w-4 h-4 mr-2" />
+									Connect Slack
+								</Button>
+							)}
+						</div>
+
+						{/* Slack Channel Link (only show if Slack is connected and workspaceId is provided) */}
+						{slackConnection?.connected && workspaceId && (
+							<>
+								<Separator />
+								<div className="flex flex-col gap-3">
+									<div className="flex items-center gap-2">
+										<Hash className="w-5 h-5 text-purple-500" />
+										<h3 className="font-medium">Workspace Slack Channel</h3>
+										{linkedSlackChannel && (
+											<span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full">
+												<Check className="w-3 h-3" /> Linked
+											</span>
+										)}
+									</div>
+									<p className="text-sm text-slate-500">
+										Link a Slack channel to sync messages bi-directionally.
+									</p>
+									{linkedSlackChannel ? (
+										<div className="flex items-center gap-2">
+											<span className="text-sm font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
+												#{linkedSlackChannel.channelName}
+											</span>
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={handleUnlinkSlackChannel}
+											>
+												<Unlink className="w-4 h-4 mr-1" />
+												Unlink
+											</Button>
+										</div>
+									) : (
+										<div className="flex flex-col gap-2">
+											{slackChannels.length === 0 ? (
+												<Button
+													variant="outline"
+													onClick={handleLoadSlackChannels}
+													disabled={loadingChannels}
+												>
+													{loadingChannels ? (
+														<Loader2 className="w-4 h-4 animate-spin mr-2" />
+													) : (
+														<Hash className="w-4 h-4 mr-2" />
+													)}
+													Load Channels
+												</Button>
+											) : (
+												<>
+													<select
+														className="w-full px-3 py-2 border rounded-md bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+														value={selectedChannelId || ""}
+														onChange={(e) => setSelectedChannelId(e.target.value || null)}
+													>
+														<option value="">Select a channel...</option>
+														{slackChannels.map((ch) => (
+															<option key={ch.id} value={ch.id}>
+																#{ch.name} ({ch.memberCount} members)
+															</option>
+														))}
+													</select>
+													{selectedChannelId && (
+														<Button
+															onClick={handleLinkSlackChannel}
+															disabled={savingChannel}
+														>
+															{savingChannel ? (
+																<Loader2 className="w-4 h-4 animate-spin" />
+															) : (
+																"Link Channel"
+															)}
+														</Button>
+													)}
+												</>
+											)}
+										</div>
+									)}
+								</div>
+							</>
+						)}
+
 						{/* Workspace Repository (only show if GitHub is connected and workspaceId is provided) */}
 						{integrations?.github.connected && workspaceId && (
 							<>
@@ -445,7 +648,7 @@ export default function IntegrationsModal({
 					</div>
 				)}
 
-				<div className="flex justify-end pt-4">
+				<div className="flex justify-end pt-4 shrink-0 border-t mt-4">
 					<Button variant="outline" onClick={() => onOpenChange(false)}>
 						Done
 					</Button>

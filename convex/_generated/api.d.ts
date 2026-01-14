@@ -18,6 +18,7 @@ import type * as notionApi from "../notionApi.js";
 import type * as notionApiInternal from "../notionApiInternal.js";
 import type * as opencodePlanning from "../opencodePlanning.js";
 import type * as organizations from "../organizations.js";
+import type * as slack from "../slack.js";
 import type * as ticketAi from "../ticketAi.js";
 import type * as todoComments from "../todoComments.js";
 import type * as todoCommentsAi from "../todoCommentsAi.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   notionApiInternal: typeof notionApiInternal;
   opencodePlanning: typeof opencodePlanning;
   organizations: typeof organizations;
+  slack: typeof slack;
   ticketAi: typeof ticketAi;
   todoComments: typeof todoComments;
   todoCommentsAi: typeof todoCommentsAi;

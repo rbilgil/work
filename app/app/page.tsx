@@ -138,6 +138,7 @@ export default function Work() {
 							{viewMode === "chat" ? (
 								<MessageArea
 									workspaceId={selectedWorkspaceId}
+									organizationId={currentOrganization._id}
 									onOpenThread={setThreadMessageId}
 								/>
 							) : (

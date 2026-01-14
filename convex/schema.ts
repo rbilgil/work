@@ -39,7 +39,7 @@ export default defineSchema({
 	// One user connects, everyone in the org can use it across all workspaces
 	organization_integrations: defineTable({
 		organizationId: v.id("organizations"),
-		type: v.union(v.literal("github"), v.literal("cursor"), v.literal("notion")),
+		type: v.union(v.literal("github"), v.literal("cursor"), v.literal("notion"), v.literal("slack")),
 		// For cursor: stores encrypted API key
 		// For github: stores encrypted access/refresh tokens
 		encryptedAccessToken: v.optional(v.string()), // AES-GCM encrypted
@@ -81,6 +81,38 @@ export default defineSchema({
 		createdAt: v.number(),
 	}).index("by_workspace", ["workspaceId"]),
 
+	// Slack Channel Links - Link Slack channels to workspaces for bi-directional sync
+	slack_channel_links: defineTable({
+		workspaceId: v.id("workspaces"),
+		organizationId: v.id("organizations"),
+		slackTeamId: v.string(), // Slack workspace/team ID
+		slackChannelId: v.string(), // Slack channel ID
+		slackChannelName: v.string(), // Channel name for display
+		createdByUserId: v.id("users"),
+		createdAt: v.number(),
+	})
+		.index("by_workspace", ["workspaceId"])
+		.index("by_slack_channel", ["slackChannelId"]),
+
+	// User Slack Tokens - Per-user OAuth tokens for posting as the user
+	user_slack_tokens: defineTable({
+		userId: v.id("users"),
+		organizationId: v.id("organizations"), // Scoped to org (user may be in multiple orgs)
+		slackUserId: v.string(), // Slack's user ID
+		slackTeamId: v.string(), // Slack workspace/team ID
+		slackUserName: v.string(), // Display name in Slack
+		slackUserImage: v.optional(v.string()), // Avatar URL
+		encryptedAccessToken: v.string(), // User's OAuth token (encrypted)
+		// OAuth state for CSRF protection (only set during pending OAuth flow)
+		oauthState: v.optional(v.string()),
+		oauthStateExpiresAt: v.optional(v.number()),
+		createdAt: v.number(),
+		updatedAt: v.optional(v.number()),
+	})
+		.index("by_user_and_org", ["userId", "organizationId"])
+		.index("by_oauth_state", ["oauthState"])
+		.index("by_slack_user", ["slackTeamId", "slackUserId"]),
+
 	// Workspace Messages - Chat messages with threading support
 	workspace_messages: defineTable({
 		workspaceId: v.id("workspaces"),
@@ -89,10 +121,16 @@ export default defineSchema({
 		userId: v.id("users"),
 		createdAt: v.number(),
 		updatedAt: v.optional(v.number()),
+		// Slack sync fields
+		slackMessageTs: v.optional(v.string()), // Slack message timestamp (unique ID)
+		slackUserId: v.optional(v.string()), // Slack user ID if message came from Slack
+		slackUserName: v.optional(v.string()), // Slack user display name
+		fromSlack: v.optional(v.boolean()), // true if message originated from Slack
 	})
 		.index("by_workspace", ["workspaceId"])
 		.index("by_workspace_and_created", ["workspaceId", "createdAt"])
-		.index("by_parent", ["parentMessageId"]),
+		.index("by_parent", ["parentMessageId"])
+		.index("by_slack_ts", ["slackMessageTs"]),
 
 	// Workspace Documents - Markdown documents
 	workspace_docs: defineTable({

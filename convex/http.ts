@@ -35,7 +35,10 @@ http.route({
 	method: "POST",
 	handler: httpAction(async (ctx, request) => {
 		console.log("\n" + "=".repeat(60));
-		console.log("[WEBHOOK] Cursor webhook received at", new Date().toISOString());
+		console.log(
+			"[WEBHOOK] Cursor webhook received at",
+			new Date().toISOString(),
+		);
 		console.log("=".repeat(60));
 
 		try {
@@ -79,7 +82,9 @@ http.route({
 			);
 
 			if (!agentRun) {
-				console.log(`[WEBHOOK] ERROR: No agent run found for Cursor agent: ${agentId}`);
+				console.log(
+					`[WEBHOOK] ERROR: No agent run found for Cursor agent: ${agentId}`,
+				);
 				return new Response("Agent not found", { status: 404 });
 			}
 			console.log("[WEBHOOK] Agent run found:", {
@@ -115,7 +120,11 @@ http.route({
 				payload.pr?.number ||
 				payload.pullRequest?.number ||
 				(prUrl ? parseInt(prUrl.split("/").pop() || "0") : undefined);
-			const summary = payload.summary || payload.result?.summary || payload.output || payload.result?.output;
+			const summary =
+				payload.summary ||
+				payload.result?.summary ||
+				payload.output ||
+				payload.result?.output;
 			const errorMessage = payload.error || payload.errorMessage;
 			console.log("[WEBHOOK] Extracted data:", {
 				prUrl: prUrl || "(none)",
@@ -126,7 +135,10 @@ http.route({
 			});
 			if (summary) {
 				console.log("[WEBHOOK] === SUMMARY/PLAN START ===");
-				console.log(summary.slice(0, 2000) + (summary.length > 2000 ? "... (truncated)" : ""));
+				console.log(
+					summary.slice(0, 2000) +
+						(summary.length > 2000 ? "... (truncated)" : ""),
+				);
 				console.log("[WEBHOOK] === SUMMARY/PLAN END ===");
 			}
 
@@ -163,10 +175,14 @@ http.route({
 
 					// Generate sub-tasks from the plan
 					console.log("[WEBHOOK] Scheduling sub-task generation...");
-					await ctx.scheduler.runAfter(0, internal.ticketAi.generateSubTasksFromPlan, {
-						todoId: agentRun.todoId,
-						plan: summary,
-					});
+					await ctx.scheduler.runAfter(
+						0,
+						internal.ticketAi.generateSubTasksFromPlan,
+						{
+							todoId: agentRun.todoId,
+							plan: summary,
+						},
+					);
 					console.log("[WEBHOOK] Sub-task generation scheduled");
 				} else {
 					console.log("[WEBHOOK] ERROR: No summary/plan returned from agent");
@@ -190,7 +206,10 @@ http.route({
 					},
 				);
 			} else {
-				console.log("[WEBHOOK] This is an IMPLEMENTATION run with status:", mappedStatus);
+				console.log(
+					"[WEBHOOK] This is an IMPLEMENTATION run with status:",
+					mappedStatus,
+				);
 			}
 
 			console.log("=".repeat(60));
@@ -487,6 +506,328 @@ http.route({
 	}),
 });
 
+// ============ SLACK OAUTH CALLBACK ============
+
+http.route({
+	path: "/auth/slack/callback",
+	method: "GET",
+	handler: httpAction(async (ctx, request) => {
+		const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+		try {
+			const url = new URL(request.url);
+			const code = url.searchParams.get("code");
+			const state = url.searchParams.get("state");
+			const error = url.searchParams.get("error");
+
+			if (error) {
+				console.error("Slack OAuth error:", error);
+				const errorUrl = new URL("/app", appUrl);
+				errorUrl.searchParams.set("slack_error", error);
+				return Response.redirect(errorUrl.toString(), 302);
+			}
+
+			if (!code) {
+				return new Response("Missing code parameter", { status: 400 });
+			}
+
+			if (!state) {
+				return new Response("Missing state parameter", { status: 400 });
+			}
+
+			const clientId = process.env.SLACK_CLIENT_ID;
+			const clientSecret = process.env.SLACK_CLIENT_SECRET;
+
+			if (!clientId || !clientSecret) {
+				console.error("Slack OAuth not configured");
+				return new Response("OAuth not configured", { status: 500 });
+			}
+
+			const convexUrl = process.env.CONVEX_SITE_URL;
+			if (!convexUrl) {
+				console.error("CONVEX_SITE_URL not configured");
+				return new Response("Server configuration error", { status: 500 });
+			}
+
+			const redirectUri = `${convexUrl}/auth/slack/callback`;
+
+			// Exchange code for access token
+			const tokenResponse = await fetch(
+				"https://slack.com/api/oauth.v2.access",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						client_id: clientId,
+						client_secret: clientSecret,
+						code,
+						redirect_uri: redirectUri,
+					}),
+				},
+			);
+
+			const tokenData = await tokenResponse.json();
+
+			if (!tokenData.ok) {
+				console.error("Slack OAuth token error:", tokenData.error);
+				const errorUrl = new URL("/app", appUrl);
+				errorUrl.searchParams.set("slack_error", tokenData.error);
+				return Response.redirect(errorUrl.toString(), 302);
+			}
+
+			// Check if this is a user OAuth flow (state starts with "user_")
+			const isUserOAuth = state.startsWith("user_");
+
+			if (isUserOAuth) {
+				// User OAuth - get token from authed_user field
+				const userToken = tokenData.authed_user?.access_token;
+				const slackUserId = tokenData.authed_user?.id;
+				const slackTeamId = tokenData.team?.id || "";
+
+				if (!userToken || !slackUserId) {
+					console.error("Missing user token data in Slack OAuth response");
+					const errorUrl = new URL("/app", appUrl);
+					errorUrl.searchParams.set("slack_error", "Missing user token");
+					return Response.redirect(errorUrl.toString(), 302);
+				}
+
+				// Get user info to get their name and avatar
+				let slackUserName = slackUserId;
+				let slackUserImage: string | undefined;
+
+				try {
+					// We need to use the bot token or user token to get user info
+					// The user token should work with users:read if granted
+					const userInfoResponse = await fetch(
+						`https://slack.com/api/users.info?user=${slackUserId}`,
+						{
+							headers: {
+								Authorization: `Bearer ${userToken}`,
+							},
+						},
+					);
+					const userInfo = await userInfoResponse.json();
+					if (userInfo.ok && userInfo.user) {
+						slackUserName =
+							userInfo.user.profile?.display_name ||
+							userInfo.user.real_name ||
+							userInfo.user.name ||
+							slackUserId;
+						slackUserImage =
+							userInfo.user.profile?.image_72 ||
+							userInfo.user.profile?.image_48;
+					}
+				} catch {
+					// Use fallback values
+				}
+
+				// Complete user OAuth
+				const result = await ctx.runMutation(
+					internal.slack.completeUserSlackOAuth,
+					{
+						state,
+						accessToken: userToken,
+						slackUserId,
+						slackTeamId,
+						slackUserName,
+						slackUserImage,
+					},
+				);
+
+				if (!result.success) {
+					console.error("Failed to complete user Slack OAuth:", result.error);
+					const errorUrl = new URL("/app", appUrl);
+					errorUrl.searchParams.set(
+						"slack_error",
+						result.error || "Unknown error",
+					);
+					return Response.redirect(errorUrl.toString(), 302);
+				}
+
+				const successUrl = new URL("/app", appUrl);
+				successUrl.searchParams.set("slack_user_connected", "true");
+				return Response.redirect(successUrl.toString(), 302);
+			}
+
+			// Organization OAuth - bot token
+			const accessToken = tokenData.access_token;
+			const teamId = tokenData.team?.id || "";
+			const teamName = tokenData.team?.name || "";
+			const botUserId = tokenData.bot_user_id;
+
+			// Save the token
+			const result = await ctx.runMutation(internal.slack.completeSlackOAuth, {
+				state,
+				accessToken,
+				teamId,
+				teamName,
+				botUserId,
+			});
+
+			if (!result.success) {
+				console.error("Failed to complete Slack OAuth:", result.error);
+				const errorUrl = new URL("/app", appUrl);
+				errorUrl.searchParams.set(
+					"slack_error",
+					result.error || "Unknown error",
+				);
+				return Response.redirect(errorUrl.toString(), 302);
+			}
+
+			const successUrl = new URL("/app", appUrl);
+			successUrl.searchParams.set("slack_connected", "true");
+			return Response.redirect(successUrl.toString(), 302);
+		} catch (error) {
+			console.error("Error in Slack OAuth callback:", error);
+			const errorUrl = new URL("/app", appUrl);
+			errorUrl.searchParams.set("slack_error", "Internal error");
+			return Response.redirect(errorUrl.toString(), 302);
+		}
+	}),
+});
+
+// ============ SLACK EVENTS WEBHOOK ============
+
+http.route({
+	path: "/webhooks/slack",
+	method: "POST",
+	handler: httpAction(async (ctx, request) => {
+		console.log("http request received");
+		try {
+			const body = await request.text();
+			const payload = JSON.parse(body);
+
+			// Handle Slack URL verification challenge
+			if (payload.type === "url_verification") {
+				return new Response(payload.challenge, {
+					status: 200,
+					headers: { "Content-Type": "text/plain" },
+				});
+			}
+
+			// Verify request is from Slack using signing secret
+			const signingSecret = process.env.SLACK_SIGNING_SECRET;
+			if (signingSecret) {
+				const timestamp = request.headers.get("X-Slack-Request-Timestamp");
+				const signature = request.headers.get("X-Slack-Signature");
+
+				if (timestamp && signature) {
+					// Check timestamp is recent (within 5 minutes)
+					const now = Math.floor(Date.now() / 1000);
+					if (Math.abs(now - parseInt(timestamp)) > 300) {
+						console.error("Slack webhook timestamp too old");
+						return new Response("Invalid timestamp", { status: 401 });
+					}
+
+					// Verify signature
+					const sigBaseString = `v0:${timestamp}:${body}`;
+					const encoder = new TextEncoder();
+					const key = await crypto.subtle.importKey(
+						"raw",
+						encoder.encode(signingSecret),
+						{ name: "HMAC", hash: { name: "SHA-256" } },
+						false,
+						["sign"],
+					);
+					const sig = await crypto.subtle.sign(
+						"HMAC",
+						key,
+						encoder.encode(sigBaseString),
+					);
+					const hashHex =
+						"v0=" +
+						Array.from(new Uint8Array(sig))
+							.map((b) => b.toString(16).padStart(2, "0"))
+							.join("");
+
+					if (hashHex !== signature) {
+						console.error("Slack webhook signature mismatch");
+						return new Response("Invalid signature", { status: 401 });
+					}
+				}
+			}
+
+			// Handle events
+			if (payload.type === "event_callback") {
+				const event = payload.event;
+
+				// Only handle message events (not subtypes like message_changed)
+				if (event.type === "message" && !event.subtype) {
+					const channelId = event.channel;
+					const slackUserId = event.user;
+					const text = event.text || "";
+					const messageTs = event.ts;
+					// thread_ts is the parent message ts if this is a reply
+					const threadTs = event.thread_ts as string | undefined;
+
+					// Skip bot messages to avoid loops
+					if (event.bot_id) {
+						return new Response("OK", { status: 200 });
+					}
+
+					// Find workspace linked to this channel
+					const workspaceId = await ctx.runQuery(
+						internal.slack.getWorkspaceBySlackChannel,
+						{ slackChannelId: channelId },
+					);
+
+					if (!workspaceId) {
+						// Channel not linked to any workspace
+						return new Response("OK", { status: 200 });
+					}
+
+					// Get user info from Slack
+					const slackData = await ctx.runQuery(
+						internal.slack.getSlackTokenByWorkspace,
+						{ workspaceId },
+					);
+
+					let userName = slackUserId;
+					if (slackData) {
+						try {
+							const userResponse = await fetch(
+								`https://slack.com/api/users.info?user=${slackUserId}`,
+								{
+									headers: {
+										Authorization: `Bearer ${slackData.accessToken}`,
+									},
+								},
+							);
+							const userData = await userResponse.json();
+							if (userData.ok) {
+								userName =
+									userData.user?.profile?.display_name ||
+									userData.user?.real_name ||
+									userData.user?.name ||
+									slackUserId;
+							}
+						} catch {
+							// Use slack user ID as fallback
+						}
+					}
+
+					// Create message in workspace
+					await ctx.runMutation(internal.slack.createMessageFromSlack, {
+						workspaceId,
+						content: text,
+						slackMessageTs: messageTs,
+						slackThreadTs: threadTs, // Parent message ts for threading
+						slackUserId,
+						slackUserName: userName,
+					});
+				}
+			}
+
+			return new Response("OK", { status: 200 });
+		} catch (error) {
+			console.error("Error processing Slack webhook:", error);
+			return new Response("Internal error", { status: 500 });
+		}
+	}),
+});
+
 // ============ MCP SERVER ============
 
 // MCP Protocol Types
@@ -552,10 +893,9 @@ http.route({
 			}
 
 			// Validate token
-			const tokenResult = await ctx.runQuery(
-				internal.mcp.validateMcpToken,
-				{ token },
-			);
+			const tokenResult = await ctx.runQuery(internal.mcp.validateMcpToken, {
+				token,
+			});
 
 			if (!tokenResult.valid) {
 				return new Response(
@@ -731,7 +1071,9 @@ http.route({
 						}
 					} else {
 						return new Response(
-							JSON.stringify(mcpError(req.id, -32602, `Unknown resource: ${uri}`)),
+							JSON.stringify(
+								mcpError(req.id, -32602, `Unknown resource: ${uri}`),
+							),
 							{ status: 400, headers: corsHeaders },
 						);
 					}
@@ -783,8 +1125,7 @@ http.route({
 							},
 							{
 								name: "add_comment",
-								description:
-									"Add a comment/update to the workspace chat",
+								description: "Add a comment/update to the workspace chat",
 								inputSchema: {
 									type: "object",
 									properties: {
@@ -798,8 +1139,7 @@ http.route({
 							},
 							{
 								name: "mark_complete",
-								description:
-									"Mark the task as complete with a summary",
+								description: "Mark the task as complete with a summary",
 								inputSchema: {
 									type: "object",
 									properties: {
@@ -818,21 +1158,31 @@ http.route({
 
 				case "tools/call": {
 					const toolName = req.params?.name as string;
-					const toolArgs = (req.params?.arguments || {}) as Record<string, unknown>;
+					const toolArgs = (req.params?.arguments || {}) as Record<
+						string,
+						unknown
+					>;
 
 					// Get the token doc to find the user who created it
-					const tokenDoc = await ctx.runQuery(internal.mcp.validateMcpToken, { token });
+					const tokenDoc = await ctx.runQuery(internal.mcp.validateMcpToken, {
+						token,
+					});
 					if (!tokenDoc.valid) {
 						return new Response(
-							JSON.stringify(mcpError(req.id, -32600, "Token validation failed")),
+							JSON.stringify(
+								mcpError(req.id, -32600, "Token validation failed"),
+							),
 							{ status: 401, headers: corsHeaders },
 						);
 					}
 
 					// We need the userId from the token - let's get it from the token doc
-					const fullTokenDoc = await ctx.runQuery(internal.mcp.getTokenCreator, {
-						tokenId: tokenDoc.tokenId,
-					});
+					const fullTokenDoc = await ctx.runQuery(
+						internal.mcp.getTokenCreator,
+						{
+							tokenId: tokenDoc.tokenId,
+						},
+					);
 
 					switch (toolName) {
 						case "search_context": {
@@ -891,7 +1241,9 @@ http.route({
 							});
 
 							response = mcpResponse(req.id, {
-								content: [{ type: "text", text: "Comment added to workspace." }],
+								content: [
+									{ type: "text", text: "Comment added to workspace." },
+								],
 							});
 							break;
 						}
@@ -946,7 +1298,11 @@ http.route({
 			console.error("MCP error:", error);
 			return new Response(
 				JSON.stringify(
-					mcpError(0, -32603, error instanceof Error ? error.message : "Internal error"),
+					mcpError(
+						0,
+						-32603,
+						error instanceof Error ? error.message : "Internal error",
+					),
 				),
 				{ status: 500, headers: corsHeaders },
 			);

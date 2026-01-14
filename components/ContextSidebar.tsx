@@ -4,6 +4,7 @@ import {
 	CheckSquare,
 	FileText,
 	GitBranch,
+	Key,
 	LayoutGrid,
 	Link as LinkIcon,
 	Settings,
@@ -53,6 +54,9 @@ export default function ContextSidebar({
 	const links = useQuery(api.workspaces.listLinks, { workspaceId });
 	const workspaceRepo = useQuery(api.integrations.getWorkspaceRepo, {
 		workspaceId,
+	});
+	const integrations = useQuery(api.integrations.getOrganizationIntegrations, {
+		organizationId,
 	});
 
 	const [docModalOpen, setDocModalOpen] = useState(false);
@@ -121,6 +125,23 @@ export default function ContextSidebar({
 								}}
 							/>
 						))
+					)}
+					{/* Notion Connect Prompt */}
+					{integrations && !integrations.notion?.connected && (
+						<div className="mt-2 p-2 rounded-lg bg-slate-100 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
+							<p className="text-xs text-slate-500 mb-2">
+								Connect Notion to import docs automatically
+							</p>
+							<Button
+								variant="outline"
+								size="sm"
+								className="w-full gap-2 text-xs"
+								onClick={() => setSettingsOpen(true)}
+							>
+								<FileText className="w-3.5 h-3.5" />
+								Connect Notion
+							</Button>
+						</div>
 					)}
 				</ContextSection>
 
@@ -237,6 +258,23 @@ export default function ContextSidebar({
 									)}
 								</div>
 							))}
+						</div>
+					)}
+					{/* Cursor Connect Prompt */}
+					{integrations && !integrations.cursor?.connected && (
+						<div className="mt-2 p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-200/50 dark:border-purple-500/20">
+							<p className="text-xs text-slate-500 mb-2">
+								Connect Cursor to enable AI coding agents
+							</p>
+							<Button
+								variant="outline"
+								size="sm"
+								className="w-full gap-2 text-xs"
+								onClick={() => setSettingsOpen(true)}
+							>
+								<Key className="w-3.5 h-3.5" />
+								Connect Cursor API
+							</Button>
 						</div>
 					)}
 				</ContextSection>
