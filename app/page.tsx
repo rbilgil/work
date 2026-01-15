@@ -194,7 +194,7 @@ function Hero() {
 							</div>
 							<div>
 								<p className="text-sm font-medium text-stone-700">
-									Feature shipped
+									PRs ready for review
 								</p>
 								<p className="text-xs text-stone-400">while you were asleep</p>
 							</div>
@@ -217,9 +217,11 @@ function Hero() {
 							</div>
 							<div>
 								<p className="text-sm font-medium text-stone-700">
-									Agent working
+									Agents working 24/7
 								</p>
-								<p className="text-xs text-stone-400">3 tasks in progress</p>
+								<p className="text-xs text-stone-400">
+									0 tickets left in Backlog
+								</p>
 							</div>
 						</div>
 					</motion.div>
@@ -234,7 +236,7 @@ function ProblemSection() {
 	const scatteredTools = [
 		{ name: "Slack threads", icon: MessageSquare },
 		{ name: "Notion docs", icon: FileText },
-		{ name: "Jira tickets", icon: FileText },
+		{ name: "Linear tickets", icon: FileText },
 		{ name: "Google Docs", icon: FileText },
 		{ name: "Email chains", icon: MessageSquare },
 	];
@@ -275,24 +277,17 @@ function ProblemSection() {
 				</motion.div>
 
 				{/* Scattered tools visualization */}
-				<motion.div
-					initial="hidden"
-					whileInView="visible"
-					viewport={{ once: true }}
-					variants={staggerContainer}
-					className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-16"
-				>
+				<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-16">
 					{scatteredTools.map((tool) => (
-						<motion.div
+						<div
 							key={tool.name}
-							variants={fadeInUp}
-							className="p-4 rounded-lg border border-stone-200 bg-stone-50/50 text-center"
+							className="p-4 rounded-lg border border-stone-300 bg-stone-100 text-center shadow-sm"
 						>
-							<tool.icon className="w-5 h-5 text-stone-400 mx-auto mb-2" />
-							<span className="text-sm text-stone-500">{tool.name}</span>
-						</motion.div>
+							<tool.icon className="w-5 h-5 text-stone-500 mx-auto mb-2" />
+							<span className="text-sm text-stone-600 font-medium">{tool.name}</span>
+						</div>
 					))}
-				</motion.div>
+				</div>
 
 				{/* Pain points */}
 				<motion.div
@@ -307,13 +302,13 @@ function ProblemSection() {
 						className="p-6 rounded-xl border border-stone-200 bg-white"
 					>
 						<h3 className="text-lg font-semibold text-stone-900 mb-3">
-							The Babysitting Problem
+							Agents need babysitting
 						</h3>
 						<p className="text-stone-500 leading-relaxed">
 							You can&apos;t step away. Every AI task turns into a
 							back-and-forth. &ldquo;What&apos;s the API format?&rdquo;
 							&ldquo;Where&apos;s that config file?&rdquo; &ldquo;What did the
-							team decide about auth?&rdquo; You&apos;re always in the loop.
+							team decide about auth?&rdquo;
 						</p>
 					</motion.div>
 					<motion.div
@@ -324,9 +319,8 @@ function ProblemSection() {
 							Context Isn&apos;t Structured
 						</h3>
 						<p className="text-stone-500 leading-relaxed">
-							AI is incredible at navigating codebases. But your product
-							context? It&apos;s scattered across tools in formats AI can&apos;t
-							easily traverse. That&apos;s the missing piece.
+							Your product context is scattered across tools in formats AI
+							can&apos;t easily traverse
 						</p>
 					</motion.div>
 				</motion.div>
@@ -348,7 +342,8 @@ function InsightSection() {
 				>
 					<p className="text-teal-200 text-sm font-medium mb-3">The Insight</p>
 					<h2 className="text-2xl sm:text-3xl font-bold text-white mb-4 leading-tight">
-						AI agents are great at navigating codebases.
+						The latest AI agents can run for hours on end with the right
+						context.
 						<br />
 						What if your product context worked the same way?
 					</h2>
