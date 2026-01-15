@@ -13,6 +13,7 @@ import {
 	Tornado,
 	Zap,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 // Animation variants
@@ -231,16 +232,269 @@ function Hero() {
 	);
 }
 
-// Problem Section
-function ProblemSection() {
-	const scatteredTools = [
-		{ name: "Slack threads", icon: MessageSquare },
-		{ name: "Notion docs", icon: FileText },
-		{ name: "Linear tickets", icon: FileText },
-		{ name: "Google Docs", icon: FileText },
-		{ name: "Email chains", icon: MessageSquare },
+// Tool Icons (inline SVGs for tools without public assets)
+const NotionIcon = () => (
+	<svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+		<path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.933zm14.337.745c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.186v6.952l1.448.327s0 .84-1.168.84l-3.22.186c-.094-.186 0-.653.327-.746l.84-.233V9.854L7.822 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.279v-6.44l-1.215-.14c-.093-.514.28-.887.747-.933zM1.936 1.035l13.31-.98c1.634-.14 2.055-.047 3.082.7l4.249 2.986c.7.513.934.653.934 1.213v16.378c0 1.026-.373 1.634-1.68 1.726l-15.458.934c-.98.047-1.448-.093-1.962-.747l-3.129-4.06c-.56-.747-.793-1.306-.793-1.96V2.667c0-.839.374-1.54 1.447-1.632z" />
+	</svg>
+);
+
+const GoogleDocsIcon = () => (
+	<svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+		<path d="M14.727 6.727H14V0H4.91c-.905 0-1.637.732-1.637 1.636v20.728c0 .904.732 1.636 1.636 1.636h14.182c.904 0 1.636-.732 1.636-1.636V6.727h-6zm-.545 10.455H7.09v-1.364h7.09v1.364zm2.727-3.273H7.091v-1.364h9.818v1.364zm0-3.273H7.091V9.273h9.818v1.363zM14.727 6h6l-6-6v6z" />
+	</svg>
+);
+
+const GmailIcon = () => (
+	<svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+		<path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z" />
+	</svg>
+);
+
+// Scattered Tools Visualization
+function ScatteredToolsViz() {
+	const tools = [
+		{
+			name: "Slack",
+			bgColor: "#FDF2F4",
+			x: "8%",
+			y: "15%",
+			delay: 0,
+			iconSrc: "/slack.svg",
+		},
+		{
+			name: "Notion",
+			bgColor: "#F5F5F5",
+			x: "75%",
+			y: "8%",
+			delay: 0.5,
+			Icon: NotionIcon,
+			color: "#000000",
+		},
+		{
+			name: "Linear",
+			bgColor: "#18181B",
+			x: "85%",
+			y: "55%",
+			delay: 1,
+			iconSrc: "/linear-icon.svg",
+			darkBg: true,
+		},
+		{
+			name: "Docs",
+			bgColor: "#EBF3FE",
+			x: "15%",
+			y: "65%",
+			delay: 1.5,
+			Icon: GoogleDocsIcon,
+			color: "#4285F4",
+		},
+		{
+			name: "Email",
+			bgColor: "#FEF1F0",
+			x: "50%",
+			y: "75%",
+			delay: 2,
+			Icon: GmailIcon,
+			color: "#EA4335",
+		},
+		{
+			name: "Figma",
+			bgColor: "#F6EFFE",
+			x: "45%",
+			y: "5%",
+			delay: 0.8,
+			iconSrc: "/figma.svg",
+		},
 	];
 
+	return (
+		<div className="relative h-64 sm:h-80 mb-16">
+			{/* Connecting lines SVG */}
+			<svg className="absolute inset-0 w-full h-full" style={{ zIndex: 0 }}>
+				<motion.line
+					x1="15%"
+					y1="25%"
+					x2="50%"
+					y2="15%"
+					stroke="#d4d4d4"
+					strokeWidth="1"
+					strokeDasharray="4 4"
+					initial={{ pathLength: 0, opacity: 0 }}
+					animate={{ pathLength: 1, opacity: 0.5 }}
+					transition={{ duration: 1.5, delay: 0.2 }}
+				/>
+				<motion.line
+					x1="55%"
+					y1="15%"
+					x2="80%"
+					y2="18%"
+					stroke="#d4d4d4"
+					strokeWidth="1"
+					strokeDasharray="4 4"
+					initial={{ pathLength: 0, opacity: 0 }}
+					animate={{ pathLength: 1, opacity: 0.5 }}
+					transition={{ duration: 1.5, delay: 0.4 }}
+				/>
+				<motion.line
+					x1="82%"
+					y1="25%"
+					x2="88%"
+					y2="55%"
+					stroke="#d4d4d4"
+					strokeWidth="1"
+					strokeDasharray="4 4"
+					initial={{ pathLength: 0, opacity: 0 }}
+					animate={{ pathLength: 1, opacity: 0.5 }}
+					transition={{ duration: 1.5, delay: 0.6 }}
+				/>
+				<motion.line
+					x1="85%"
+					y1="65%"
+					x2="55%"
+					y2="80%"
+					stroke="#d4d4d4"
+					strokeWidth="1"
+					strokeDasharray="4 4"
+					initial={{ pathLength: 0, opacity: 0 }}
+					animate={{ pathLength: 1, opacity: 0.5 }}
+					transition={{ duration: 1.5, delay: 0.8 }}
+				/>
+				<motion.line
+					x1="45%"
+					y1="80%"
+					x2="20%"
+					y2="70%"
+					stroke="#d4d4d4"
+					strokeWidth="1"
+					strokeDasharray="4 4"
+					initial={{ pathLength: 0, opacity: 0 }}
+					animate={{ pathLength: 1, opacity: 0.5 }}
+					transition={{ duration: 1.5, delay: 1 }}
+				/>
+				<motion.line
+					x1="18%"
+					y1="60%"
+					x2="15%"
+					y2="30%"
+					stroke="#d4d4d4"
+					strokeWidth="1"
+					strokeDasharray="4 4"
+					initial={{ pathLength: 0, opacity: 0 }}
+					animate={{ pathLength: 1, opacity: 0.5 }}
+					transition={{ duration: 1.5, delay: 1.2 }}
+				/>
+				{/* Cross lines for chaos */}
+				<motion.line
+					x1="20%"
+					y1="25%"
+					x2="80%"
+					y2="60%"
+					stroke="#d4d4d4"
+					strokeWidth="1"
+					strokeDasharray="4 4"
+					initial={{ pathLength: 0, opacity: 0 }}
+					animate={{ pathLength: 1, opacity: 0.3 }}
+					transition={{ duration: 2, delay: 1.5 }}
+				/>
+				<motion.line
+					x1="50%"
+					y1="15%"
+					x2="25%"
+					y2="70%"
+					stroke="#d4d4d4"
+					strokeWidth="1"
+					strokeDasharray="4 4"
+					initial={{ pathLength: 0, opacity: 0 }}
+					animate={{ pathLength: 1, opacity: 0.3 }}
+					transition={{ duration: 2, delay: 1.7 }}
+				/>
+			</svg>
+
+			{/* Floating tool cards */}
+			{tools.map((tool, i) => (
+				<motion.div
+					key={tool.name}
+					className={`absolute px-3 py-2 rounded-full shadow-lg border cursor-pointer ${tool.darkBg ? "border-stone-700" : "border-stone-200"}`}
+					style={{
+						left: tool.x,
+						top: tool.y,
+						backgroundColor: tool.bgColor,
+						zIndex: 10,
+					}}
+					initial={{ opacity: 0, scale: 0.5 }}
+					animate={{
+						opacity: 1,
+						scale: 1,
+						y: [0, -8, 0, 5, 0],
+						x: [0, 3, -3, 2, 0],
+					}}
+					transition={{
+						opacity: { duration: 0.5, delay: tool.delay },
+						scale: { duration: 0.5, delay: tool.delay },
+						y: {
+							duration: 4 + i * 0.5,
+							repeat: Infinity,
+							ease: "easeInOut",
+							delay: tool.delay,
+						},
+						x: {
+							duration: 5 + i * 0.3,
+							repeat: Infinity,
+							ease: "easeInOut",
+							delay: tool.delay,
+						},
+					}}
+					whileHover={{
+						scale: 1.1,
+						boxShadow: "0 10px 40px -10px rgba(0,0,0,0.2)",
+					}}
+				>
+					<div
+						className="flex items-center gap-2"
+						style={{ color: tool.color }}
+					>
+						{tool.iconSrc ? (
+							<Image
+								src={tool.iconSrc}
+								alt={tool.name}
+								width={16}
+								height={16}
+								className="w-4 h-4"
+							/>
+						) : tool.Icon ? (
+							<tool.Icon />
+						) : null}
+						<span
+							className={`text-sm font-medium ${tool.darkBg ? "text-white" : "text-stone-700"}`}
+						>
+							{tool.name}
+						</span>
+					</div>
+				</motion.div>
+			))}
+
+			{/* Center question mark or confused state */}
+			<motion.div
+				className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-stone-100 border-2 border-dashed border-stone-300 flex items-center justify-center z-20"
+				animate={{
+					rotate: [0, 5, -5, 0],
+					scale: [1, 1.05, 1],
+				}}
+				transition={{
+					duration: 3,
+					repeat: Infinity,
+					ease: "easeInOut",
+				}}
+			>
+				<span className="text-2xl text-stone-400">?</span>
+			</motion.div>
+		</div>
+	);
+}
+
+// Problem Section
+function ProblemSection() {
 	return (
 		<section id="problem" className="py-24 bg-white">
 			<div className="max-w-5xl mx-auto px-6">
@@ -272,22 +526,12 @@ function ProblemSection() {
 						Every night, every weekend, every lunch break—your product sits
 						idle. AI tools exist, but they need constant input. Context is
 						scattered. You&apos;re the bottleneck, and when you step away,
-						progress stops completely.
+						progress stops.
 					</motion.p>
 				</motion.div>
 
 				{/* Scattered tools visualization */}
-				<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-16">
-					{scatteredTools.map((tool) => (
-						<div
-							key={tool.name}
-							className="p-4 rounded-lg border border-stone-300 bg-stone-100 text-center shadow-sm"
-						>
-							<tool.icon className="w-5 h-5 text-stone-500 mx-auto mb-2" />
-							<span className="text-sm text-stone-600 font-medium">{tool.name}</span>
-						</div>
-					))}
-				</div>
+				<ScatteredToolsViz />
 
 				{/* Pain points */}
 				<motion.div
@@ -305,10 +549,8 @@ function ProblemSection() {
 							Agents need babysitting
 						</h3>
 						<p className="text-stone-500 leading-relaxed">
-							You can&apos;t step away. Every AI task turns into a
-							back-and-forth. &ldquo;What&apos;s the API format?&rdquo;
-							&ldquo;Where&apos;s that config file?&rdquo; &ldquo;What did the
-							team decide about auth?&rdquo;
+							Every agent task turns into a back-and-forth. You become the
+							interface between context and prompt
 						</p>
 					</motion.div>
 					<motion.div
@@ -316,42 +558,13 @@ function ProblemSection() {
 						className="p-6 rounded-xl border border-stone-200 bg-white"
 					>
 						<h3 className="text-lg font-semibold text-stone-900 mb-3">
-							Context Isn&apos;t Structured
+							Context isn&apos;t structured
 						</h3>
 						<p className="text-stone-500 leading-relaxed">
 							Your product context is scattered across tools in formats AI
 							can&apos;t easily traverse
 						</p>
 					</motion.div>
-				</motion.div>
-			</div>
-		</section>
-	);
-}
-
-// Insight Section
-function InsightSection() {
-	return (
-		<section className="py-16 bg-teal-700">
-			<div className="max-w-4xl mx-auto px-6">
-				<motion.div
-					initial={{ opacity: 0, y: 20 }}
-					whileInView={{ opacity: 1, y: 0 }}
-					viewport={{ once: true }}
-					className="text-center"
-				>
-					<p className="text-teal-200 text-sm font-medium mb-3">The Insight</p>
-					<h2 className="text-2xl sm:text-3xl font-bold text-white mb-4 leading-tight">
-						The latest AI agents can run for hours on end with the right
-						context.
-						<br />
-						What if your product context worked the same way?
-					</h2>
-					<p className="text-teal-100 text-lg max-w-2xl mx-auto">
-						Whirl structures your specs, decisions, and docs like a
-						filesystem—so agents like Claude can read your product context as
-						effectively as they read code.
-					</p>
 				</motion.div>
 			</div>
 		</section>
@@ -490,64 +703,8 @@ function VisionSection() {
 						We believe the future of building software is autonomous agents that
 						truly understand your product. Not assistants that need constant
 						prompting—but teammates that can ship real work while you focus on
-						what matters.
+						the important decisions.
 					</motion.p>
-				</motion.div>
-
-				<motion.div
-					initial="hidden"
-					whileInView="visible"
-					viewport={{ once: true }}
-					variants={staggerContainer}
-					className="grid md:grid-cols-3 gap-6"
-				>
-					<motion.div
-						variants={fadeInUp}
-						className="p-6 rounded-xl border border-stone-200 bg-stone-50/50"
-					>
-						<div className="w-10 h-10 rounded-lg bg-teal-100 flex items-center justify-center mb-4">
-							<GitBranch className="w-5 h-5 text-teal-600" />
-						</div>
-						<h3 className="text-lg font-semibold text-stone-900 mb-2">
-							Early Stage
-						</h3>
-						<p className="text-sm text-stone-500 leading-relaxed">
-							We&apos;re in active development. Joining the waitlist means
-							you&apos;ll get early access and help shape what we build.
-						</p>
-					</motion.div>
-
-					<motion.div
-						variants={fadeInUp}
-						className="p-6 rounded-xl border border-stone-200 bg-stone-50/50"
-					>
-						<div className="w-10 h-10 rounded-lg bg-terracotta/10 flex items-center justify-center mb-4">
-							<MessageSquare className="w-5 h-5 text-terracotta" />
-						</div>
-						<h3 className="text-lg font-semibold text-stone-900 mb-2">
-							Built With You
-						</h3>
-						<p className="text-sm text-stone-500 leading-relaxed">
-							We&apos;re talking to early users every week. Your feedback
-							directly influences our roadmap and priorities.
-						</p>
-					</motion.div>
-
-					<motion.div
-						variants={fadeInUp}
-						className="p-6 rounded-xl border border-stone-200 bg-stone-50/50"
-					>
-						<div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center mb-4">
-							<Sparkles className="w-5 h-5 text-amber-600" />
-						</div>
-						<h3 className="text-lg font-semibold text-stone-900 mb-2">
-							Free for Early Users
-						</h3>
-						<p className="text-sm text-stone-500 leading-relaxed">
-							Early access users will get extended free access as a thank you
-							for helping us build something great.
-						</p>
-					</motion.div>
 				</motion.div>
 			</div>
 		</section>
@@ -621,7 +778,6 @@ export default function LandingPage() {
 			<Navigation />
 			<Hero />
 			<ProblemSection />
-			<InsightSection />
 			<SolutionSection />
 			<VisionSection />
 			<CTA />
