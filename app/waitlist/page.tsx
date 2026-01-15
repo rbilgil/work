@@ -38,12 +38,12 @@ export default function WaitlistPage() {
 							Get early access to autonomous AI agents
 						</p>
 					</div>
-					<div className="bg-white rounded-xl border border-stone-200 shadow-lg shadow-stone-200/50 p-1">
+					<div className="flex justify-center">
 						<Waitlist
 							appearance={{
 								elements: {
-									rootBox: "w-full",
-									card: "bg-transparent shadow-none border-0",
+									rootBox: "w-full max-w-sm",
+									card: "bg-white shadow-lg shadow-stone-200/50 rounded-xl border border-stone-200",
 									headerTitle: "text-stone-900",
 									headerSubtitle: "text-stone-500",
 									socialButtonsBlockButton:
