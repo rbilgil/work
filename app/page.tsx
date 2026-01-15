@@ -9,6 +9,7 @@ import {
 	GitBranch,
 	Layers,
 	MessageSquare,
+	Play,
 	Sparkles,
 	Tornado,
 	Zap,
@@ -167,65 +168,87 @@ function Hero() {
 							</div>
 						</div>
 
-						{/* Content preview */}
-						<div className="aspect-[16/9] bg-gradient-to-br from-stone-50 to-stone-100 flex items-center justify-center p-8">
-							<div className="text-center">
-								<div className="w-16 h-16 rounded-2xl bg-teal-700 flex items-center justify-center mx-auto mb-4">
-									<Tornado className="w-8 h-8 text-white" />
+						{/* Video placeholder */}
+						<div className="aspect-[16/9] bg-gradient-to-br from-stone-900 to-stone-800 flex items-center justify-center relative overflow-hidden group cursor-pointer">
+							{/* Subtle pattern overlay */}
+							<div className="absolute inset-0 opacity-5">
+								<div className="absolute inset-0" style={{
+									backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
+									backgroundSize: '24px 24px'
+								}} />
+							</div>
+
+							{/* Play button */}
+							<motion.div
+								className="relative z-10 w-20 h-20 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center group-hover:bg-white/20 transition-all duration-300"
+								whileHover={{ scale: 1.1 }}
+								whileTap={{ scale: 0.95 }}
+							>
+								<div className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg">
+									<Play className="w-7 h-7 text-stone-900 ml-1" fill="currentColor" />
 								</div>
-								<p className="text-stone-400 text-lg font-medium">
-									Product preview coming soon
-								</p>
-								<p className="text-stone-300 text-sm mt-1">
-									We&apos;re building something special
-								</p>
+							</motion.div>
+
+							{/* Video label */}
+							<div className="absolute bottom-4 left-4 flex items-center gap-2">
+								<div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+								<span className="text-white/60 text-sm font-medium">Watch Demo</span>
+							</div>
+
+							{/* Duration badge */}
+							<div className="absolute bottom-4 right-4">
+								<span className="text-white/40 text-sm font-mono">2:34</span>
 							</div>
 						</div>
 					</div>
 
 					{/* Floating elements */}
-					<motion.div
-						className="absolute -top-4 -right-4 md:top-8 md:-right-8 p-3 rounded-lg bg-white border border-stone-200 shadow-lg hidden sm:block"
-						animate={{ y: [0, -8, 0] }}
-						transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-					>
-						<div className="flex items-center gap-2.5">
-							<div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-								<CheckCircle2 className="w-4 h-4 text-green-600" />
+					<div className="absolute top-[15%] -right-4 lg:-right-56 xl:-right-64 hidden md:block">
+						<motion.div
+							className="p-3 rounded-lg bg-white border border-stone-200 shadow-lg"
+							animate={{ y: [0, -8, 0] }}
+							transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+						>
+							<div className="flex items-center gap-2.5">
+								<div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+									<CheckCircle2 className="w-4 h-4 text-green-600" />
+								</div>
+								<div>
+									<p className="text-sm font-medium text-stone-700">
+										PRs ready for review
+									</p>
+									<p className="text-xs text-stone-400">while you were asleep</p>
+								</div>
 							</div>
-							<div>
-								<p className="text-sm font-medium text-stone-700">
-									PRs ready for review
-								</p>
-								<p className="text-xs text-stone-400">while you were asleep</p>
-							</div>
-						</div>
-					</motion.div>
+						</motion.div>
+					</div>
 
-					<motion.div
-						className="absolute -bottom-4 -left-4 md:bottom-8 md:-left-8 p-3 rounded-lg bg-white border border-stone-200 shadow-lg hidden sm:block"
-						animate={{ y: [0, 8, 0] }}
-						transition={{
-							duration: 5,
-							repeat: Infinity,
-							ease: "easeInOut",
-							delay: 1,
-						}}
-					>
-						<div className="flex items-center gap-2.5">
-							<div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
-								<Bot className="w-4 h-4 text-teal-600" />
+					<div className="absolute bottom-[10%] -left-4 lg:-left-56 xl:-left-64 hidden md:block">
+						<motion.div
+							className="p-3 rounded-lg bg-white border border-stone-200 shadow-lg"
+							animate={{ y: [0, 8, 0] }}
+							transition={{
+								duration: 5,
+								repeat: Infinity,
+								ease: "easeInOut",
+								delay: 1,
+							}}
+						>
+							<div className="flex items-center gap-2.5">
+								<div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
+									<Bot className="w-4 h-4 text-teal-600" />
+								</div>
+								<div>
+									<p className="text-sm font-medium text-stone-700">
+										Agents working 24/7
+									</p>
+									<p className="text-xs text-stone-400">
+										0 tickets left in Backlog
+									</p>
+								</div>
 							</div>
-							<div>
-								<p className="text-sm font-medium text-stone-700">
-									Agents working 24/7
-								</p>
-								<p className="text-xs text-stone-400">
-									0 tickets left in Backlog
-								</p>
-							</div>
-						</div>
-					</motion.div>
+						</motion.div>
+					</div>
 				</motion.div>
 			</div>
 		</section>
