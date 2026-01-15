@@ -1,26 +1,23 @@
 "use client";
 
 import { Waitlist } from "@clerk/nextjs";
-import { Tornado } from "lucide-react";
+import { Tornado, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 export default function WaitlistPage() {
 	return (
-		<div className="min-h-screen bg-[#0a0a0f] flex flex-col">
-			{/* Background effects */}
+		<div className="min-h-screen bg-[#FAFAF8] flex flex-col">
+			{/* Subtle background */}
 			<div className="fixed inset-0 overflow-hidden pointer-events-none">
-				<div className="absolute top-1/4 right-1/4 w-[500px] h-[500px] bg-cyan-500/20 rounded-full blur-[120px]" />
-				<div className="absolute bottom-1/4 left-1/4 w-[400px] h-[400px] bg-purple-500/20 rounded-full blur-[120px]" />
-				<div className="absolute inset-0 grid-pattern opacity-30" />
+				<div className="absolute top-20 right-[20%] w-72 h-72 bg-teal-100 rounded-full blur-3xl opacity-30" />
+				<div className="absolute bottom-20 left-[20%] w-96 h-96 bg-orange-100 rounded-full blur-3xl opacity-20" />
 			</div>
 
 			{/* Header */}
 			<header className="relative z-10 p-6">
-				<Link href="/" className="flex items-center gap-2 w-fit">
-					<div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center">
-						<Tornado className="w-5 h-5 text-white" />
-					</div>
-					<span className="text-xl font-bold text-white">Whirl</span>
+				<Link href="/" className="flex items-center gap-2 w-fit text-stone-500 hover:text-stone-900 transition-colors">
+					<ArrowLeft className="w-4 h-4" />
+					<span className="text-sm">Back to home</span>
 				</Link>
 			</header>
 
@@ -28,63 +25,71 @@ export default function WaitlistPage() {
 			<main className="flex-1 flex items-center justify-center px-6 py-12 relative z-10">
 				<div className="w-full max-w-md">
 					<div className="text-center mb-8">
-						<h1 className="text-3xl font-bold text-white mb-2">
-							Join the Waitlist
+						<Link href="/" className="inline-flex items-center gap-2.5 mb-6">
+							<div className="w-10 h-10 rounded-lg bg-teal-700 flex items-center justify-center">
+								<Tornado className="w-5 h-5 text-white" />
+							</div>
+							<span className="text-xl font-semibold text-stone-900 tracking-tight">Whirl</span>
+						</Link>
+						<h1 className="text-2xl font-bold text-stone-900 mb-2">
+							Ship while you sleep
 						</h1>
-						<p className="text-white/50">
-							Be the first to know when we launch
+						<p className="text-stone-500">
+							Get early access to autonomous AI agents
 						</p>
 					</div>
-					<Waitlist
-						appearance={{
-							elements: {
-								rootBox: "w-full",
-								card: "bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl shadow-cyan-500/10",
-								headerTitle: "text-white",
-								headerSubtitle: "text-white/60",
-								socialButtonsBlockButton:
-									"bg-white/10 border-white/10 text-white hover:bg-white/20 transition-colors",
-								socialButtonsBlockButtonText: "text-white font-medium",
-								dividerLine: "bg-white/10",
-								dividerText: "text-white/40",
-								formFieldLabel: "text-white/70",
-								formFieldInput:
-									"bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-cyan-500 focus:ring-cyan-500/20",
-								formButtonPrimary:
-									"bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-medium transition-all",
-								footerActionLink:
-									"text-cyan-400 hover:text-cyan-300 transition-colors",
-								footerActionText: "text-white/50",
-								identityPreviewText: "text-white",
-								identityPreviewEditButton: "text-cyan-400 hover:text-cyan-300",
-								formFieldAction: "text-cyan-400 hover:text-cyan-300",
-								alertText: "text-white/80",
-								formFieldErrorText: "text-red-400",
-							},
-						}}
-						signInUrl="/sign-in"
-					/>
+					<div className="bg-white rounded-xl border border-stone-200 shadow-lg shadow-stone-200/50 p-1">
+						<Waitlist
+							appearance={{
+								elements: {
+									rootBox: "w-full",
+									card: "bg-transparent shadow-none border-0",
+									headerTitle: "text-stone-900",
+									headerSubtitle: "text-stone-500",
+									socialButtonsBlockButton:
+										"bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100 transition-colors",
+									socialButtonsBlockButtonText: "text-stone-700 font-medium",
+									dividerLine: "bg-stone-200",
+									dividerText: "text-stone-400",
+									formFieldLabel: "text-stone-600",
+									formFieldInput:
+										"bg-stone-50 border-stone-200 text-stone-900 placeholder:text-stone-400 focus:border-teal-500 focus:ring-teal-500/20",
+									formButtonPrimary:
+										"bg-terracotta hover:bg-terracotta-dark text-white font-medium transition-all shadow-sm",
+									footerActionLink:
+										"text-teal-600 hover:text-teal-700 transition-colors",
+									footerActionText: "text-stone-500",
+									identityPreviewText: "text-stone-900",
+									identityPreviewEditButton: "text-teal-600 hover:text-teal-700",
+									formFieldAction: "text-teal-600 hover:text-teal-700",
+									alertText: "text-stone-700",
+									formFieldErrorText: "text-red-500",
+								},
+							}}
+							signInUrl="/sign-in"
+						/>
+					</div>
 				</div>
 			</main>
 
-			{/* Features teaser */}
-			<footer className="relative z-10 p-6 border-t border-white/5">
+			{/* Footer */}
+			<footer className="relative z-10 p-6 border-t border-stone-200">
 				<div className="max-w-md mx-auto">
-					<p className="text-center text-sm text-white/40 mb-4">
-						What you&apos;ll get with Whirl
+					<p className="text-center text-sm text-stone-400 mb-4">
+						What you&apos;ll get with early access
 					</p>
 					<div className="grid grid-cols-3 gap-4 text-center">
 						<div>
-							<div className="text-lg font-semibold text-white">24/7</div>
-							<div className="text-xs text-white/40">Agent availability</div>
+							<div className="text-base font-semibold text-stone-700">Priority</div>
+							<div className="text-xs text-stone-400">First in line</div>
 						</div>
 						<div>
-							<div className="text-lg font-semibold text-white">10x</div>
-							<div className="text-xs text-white/40">Faster shipping</div>
+							<div className="text-base font-semibold text-stone-700">Free</div>
+							<div className="text-xs text-stone-400">Extended access</div>
 						</div>
 						<div>
-							<div className="text-lg font-semibold text-white">Free</div>
-							<div className="text-xs text-white/40">To get started</div>
+							<div className="text-base font-semibold text-stone-700">Input</div>
+							<div className="text-xs text-stone-400">Shape the product</div>
 						</div>
 					</div>
 				</div>
