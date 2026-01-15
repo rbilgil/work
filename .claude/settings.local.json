@@ -13,7 +13,8 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:opencode.ai)",
       "Bash(npx shadcn@latest add dropdown-menu:*)",
-      "WebFetch(domain:developers.notion.com)"
+      "WebFetch(domain:developers.notion.com)",
+      "WebFetch(domain:clerk.com)"
     ]
   }
 }

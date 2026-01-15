@@ -78,16 +78,10 @@ function Navigation() {
 				</div>
 				<div className="flex items-center gap-4">
 					<Link
-						href="/sign-in"
-						className="text-sm text-white/70 hover:text-white transition-colors hidden sm:block"
-					>
-						Sign In
-					</Link>
-					<Link
-						href="/sign-up"
+						href="/waitlist"
 						className="px-4 py-2 text-sm font-medium rounded-full bg-white text-black hover:bg-white/90 transition-colors"
 					>
-						Get Started
+						Join Waitlist
 					</Link>
 				</div>
 			</div>
@@ -123,7 +117,7 @@ function Hero() {
 					>
 						<span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
 						<span className="text-sm text-white/80">
-							Early Access Now Open
+							Join the Waitlist
 						</span>
 					</motion.div>
 
@@ -156,10 +150,10 @@ function Hero() {
 						className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8"
 					>
 						<Link
-							href="/sign-up"
+							href="/waitlist"
 							className="group px-8 py-4 rounded-full bg-gradient-to-r from-purple-500 via-indigo-500 to-cyan-500 text-white font-medium text-lg flex items-center gap-2 hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 hover:scale-105"
 						>
-							Start Building Free
+							Join the Waitlist
 							<ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
 						</Link>
 					</motion.div>
@@ -778,14 +772,14 @@ function Pricing() {
 								))}
 							</ul>
 							<Link
-								href="/sign-up"
+								href="/waitlist"
 								className={`block w-full py-3 rounded-full text-center font-medium transition-all ${
 									plan.highlighted
 										? "bg-gradient-to-r from-purple-500 to-cyan-500 text-white hover:shadow-lg hover:shadow-purple-500/25"
 										: "glass text-white hover:bg-white/10"
 								}`}
 							>
-								{plan.cta}
+								Join Waitlist
 							</Link>
 						</motion.div>
 					))}
@@ -826,10 +820,10 @@ function CTA() {
 					</motion.p>
 					<motion.div variants={fadeInUp}>
 						<Link
-							href="/sign-up"
+							href="/waitlist"
 							className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-gradient-to-r from-purple-500 via-indigo-500 to-cyan-500 text-white font-medium text-lg hover:shadow-xl hover:shadow-purple-500/30 transition-all duration-300 hover:scale-105"
 						>
-							Get Started Free
+							Join the Waitlist
 							<ArrowRight className="w-5 h-5" />
 						</Link>
 					</motion.div>

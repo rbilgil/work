@@ -34,6 +34,7 @@ export default function RootLayout({
 				<ClerkProvider
 					signInUrl="/sign-in"
 					signUpUrl="/sign-up"
+					waitlistUrl="/waitlist"
 					afterSignInUrl="/app"
 					afterSignUpUrl="/app/onboarding"
 					afterSignOutUrl="/"
