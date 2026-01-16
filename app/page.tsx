@@ -113,7 +113,7 @@ function Hero() {
 						variants={fadeInUp}
 						className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-stone-900 mb-6 leading-[1.1]"
 					>
-						Build your product
+						Your product builds itself
 						<br />
 						<span className="text-teal-700">while you sleep</span>
 					</motion.h1>
@@ -123,9 +123,9 @@ function Hero() {
 						variants={fadeInUp}
 						className="text-lg sm:text-xl text-stone-500 max-w-2xl mx-auto mb-10 leading-relaxed"
 					>
-						Product development stops the moment we leave our desks. Whirl
-						brings discussions, decisions, and context into one place and
-						automatically feeds them to an AI agent.
+						Stop being the bottleneck. Whirl unifies your team&apos;s discussions, 
+						decisions, and context, giving autonomous AI agents everything 
+						they need to keep shipping 24/7.
 					</motion.p>
 
 					{/* CTA */}
@@ -538,18 +538,18 @@ function ProblemSection() {
 						variants={fadeInUp}
 						className="text-3xl sm:text-4xl font-bold text-stone-900 mb-6 leading-tight"
 					>
-						When you stop working,
+						The world doesn&apos;t wait.
 						<br />
-						everything stops.
+						Why should your product?
 					</motion.h2>
 					<motion.p
 						variants={fadeInUp}
 						className="text-lg text-stone-500 mb-12 leading-relaxed"
 					>
-						Every night, every weekend, every lunch break—your product sits
-						idle. AI tools exist, but they need constant input. Context is
-						scattered. You&apos;re the bottleneck, and when you step away,
-						progress stops.
+						Every night, every weekend, every lunch break—your progress hits
+						a wall. AI tools exist, but they&apos;re stuck waiting for your input. 
+						Context is buried in Slack and docs. You&apos;re the only bridge between 
+						the plan and the code.
 					</motion.p>
 				</motion.div>
 
@@ -569,11 +569,11 @@ function ProblemSection() {
 						className="p-6 rounded-xl border border-stone-200 bg-white"
 					>
 						<h3 className="text-lg font-semibold text-stone-900 mb-3">
-							Agents need babysitting
+							AI shouldn&apos;t need a babysitter
 						</h3>
 						<p className="text-stone-500 leading-relaxed">
-							Every agent task turns into a back-and-forth. You become the
-							interface between context and prompt
+							Most AI agents turn into a constant back-and-forth. You spend 
+							more time managing the prompt than you would have spent doing the work.
 						</p>
 					</motion.div>
 					<motion.div
@@ -581,11 +581,11 @@ function ProblemSection() {
 						className="p-6 rounded-xl border border-stone-200 bg-white"
 					>
 						<h3 className="text-lg font-semibold text-stone-900 mb-3">
-							Context isn&apos;t structured
+							Your context is a ghost town
 						</h3>
 						<p className="text-stone-500 leading-relaxed">
-							Your product context is scattered across tools in formats AI
-							can&apos;t easily traverse
+							Crucial product decisions are scattered across a dozen tools in 
+							formats that AI can&apos;t navigate or understand.
 						</p>
 					</motion.div>
 				</motion.div>
@@ -599,30 +599,30 @@ function SolutionSection() {
 	const steps = [
 		{
 			number: "01",
-			title: "Context as a Filesystem",
+			title: "Context as Infrastructure",
 			description:
-				"Your specs, Slack decisions, and docs become a structured workspace—like a codebase for your product. Agents read context as fluently as they read code.",
+				"Your specs, Slack threads, and documentation become a structured workspace—a living codebase for your product requirements.",
 			icon: Layers,
 		},
 		{
 			number: "02",
-			title: "Queue Up Work",
+			title: "Define the Mission",
 			description:
-				"Break down what you want built into tasks. Add context, specs, constraints. Then hand it off—agents take it from here.",
+				"Queue up high-level objectives. Attach relevant context and constraints. Set the direction and let Whirl handle the orchestration.",
 			icon: MessageSquare,
 		},
 		{
 			number: "03",
-			title: "Agents Work While You Don't",
+			title: "Autonomous Execution",
 			description:
-				"Close your laptop. Agents keep shipping through the night, the weekend, your vacation. No babysitting required.",
+				"Close your laptop and walk away. Our agents keep shipping through the night, through the weekend, and through your vacation.",
 			icon: Bot,
 		},
 		{
 			number: "04",
-			title: "Wake Up to Progress",
+			title: "The Ultimate Morning Routine",
 			description:
-				"Morning coffee hits different when there's completed work waiting for review. Your downtime became productive time.",
+				"Morning coffee hits different when there's completed work, fresh PRs, and resolved tickets waiting for your review.",
 			icon: Zap,
 		},
 	];
