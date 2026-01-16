@@ -32,10 +32,10 @@ export default function WaitlistPage() {
 							<span className="text-xl font-semibold text-stone-900 tracking-tight">Whirl</span>
 						</Link>
 						<h1 className="text-2xl font-bold text-stone-900 mb-2">
-							Ship while you sleep
+							Start shipping 24/7
 						</h1>
 						<p className="text-stone-500">
-							Get early access to autonomous AI agents
+							Join the waitlist for the first autonomous product development platform
 						</p>
 					</div>
 					<div className="flex justify-center">
@@ -76,20 +76,20 @@ export default function WaitlistPage() {
 			<footer className="relative z-10 p-6 border-t border-stone-200">
 				<div className="max-w-md mx-auto">
 					<p className="text-center text-sm text-stone-400 mb-4">
-						What you&apos;ll get with early access
+						Early access benefits
 					</p>
 					<div className="grid grid-cols-3 gap-4 text-center">
 						<div>
-							<div className="text-base font-semibold text-stone-700">Priority</div>
-							<div className="text-xs text-stone-400">First in line</div>
+							<div className="text-base font-semibold text-stone-700">Founder</div>
+							<div className="text-xs text-stone-400">Direct team access</div>
 						</div>
 						<div>
-							<div className="text-base font-semibold text-stone-700">Free</div>
-							<div className="text-xs text-stone-400">Extended access</div>
+							<div className="text-base font-semibold text-stone-700">Legacy</div>
+							<div className="text-xs text-stone-400">Early adopter pricing</div>
 						</div>
 						<div>
-							<div className="text-base font-semibold text-stone-700">Input</div>
-							<div className="text-xs text-stone-400">Shape the product</div>
+							<div className="text-base font-semibold text-stone-700">Beta</div>
+							<div className="text-xs text-stone-400">Shape the roadmap</div>
 						</div>
 					</div>
 				</div>
