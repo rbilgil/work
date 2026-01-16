@@ -35,7 +35,7 @@ export default function WaitlistPage() {
 							Ship while you sleep
 						</h1>
 						<p className="text-stone-500">
-							Get early access to autonomous AI agents
+							Join the waitlist for autonomous product development.
 						</p>
 					</div>
 					<div className="flex justify-center">
