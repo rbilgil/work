@@ -73,10 +73,10 @@ export default function OnboardingPage() {
 						<Building2 className="w-8 h-8 text-white" />
 					</div>
 					<h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-						Welcome to Whirl! 🎉
+						Welcome to Whirl. Let&apos;s build.
 					</h1>
 					<p className="text-slate-600 dark:text-slate-400">
-						Let's set up your organization to get started.
+						Set up your organization to start shipping autonomously.
 					</p>
 				</div>
 
@@ -90,7 +90,7 @@ export default function OnboardingPage() {
 							htmlFor="org-name"
 							className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
 						>
-							Organization Name
+							What&apos;s your organization&apos;s name?
 						</label>
 						<Input
 							id="org-name"
@@ -101,7 +101,7 @@ export default function OnboardingPage() {
 							className="h-11"
 						/>
 						<p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-							This is where your workspaces and team members will live.
+							This will be the home for your team, workspaces, and agents.
 						</p>
 					</div>
 

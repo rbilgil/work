@@ -113,7 +113,7 @@ function Hero() {
 						variants={fadeInUp}
 						className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-stone-900 mb-6 leading-[1.1]"
 					>
-						Build your product
+						Ship your product
 						<br />
 						<span className="text-teal-700">while you sleep</span>
 					</motion.h1>
@@ -123,9 +123,9 @@ function Hero() {
 						variants={fadeInUp}
 						className="text-lg sm:text-xl text-stone-500 max-w-2xl mx-auto mb-10 leading-relaxed"
 					>
-						Product development stops the moment we leave our desks. Whirl
-						brings discussions, decisions, and context into one place and
-						automatically feeds them to an AI agent.
+						Product development shouldn&apos;t stop when you do. Whirl turns
+						your discussions, decisions, and documentation into a structured
+						brain for autonomous AI agents.
 					</motion.p>
 
 					{/* CTA */}
@@ -538,18 +538,18 @@ function ProblemSection() {
 						variants={fadeInUp}
 						className="text-3xl sm:text-4xl font-bold text-stone-900 mb-6 leading-tight"
 					>
-						When you stop working,
+						The bottleneck
 						<br />
-						everything stops.
+						is you.
 					</motion.h2>
 					<motion.p
 						variants={fadeInUp}
 						className="text-lg text-stone-500 mb-12 leading-relaxed"
 					>
-						Every night, every weekend, every lunch break—your product sits
-						idle. AI tools exist, but they need constant input. Context is
-						scattered. You&apos;re the bottleneck, and when you step away,
-						progress stops.
+						Every night, every weekend, your product sits idle. Current AI
+						tools need constant hand-holding because they lack context. Whirl
+						breaks the cycle by giving agents the autonomy to ship without
+						you.
 					</motion.p>
 				</motion.div>
 
@@ -569,11 +569,11 @@ function ProblemSection() {
 						className="p-6 rounded-xl border border-stone-200 bg-white"
 					>
 						<h3 className="text-lg font-semibold text-stone-900 mb-3">
-							Agents need babysitting
+							Stop babysitting agents
 						</h3>
 						<p className="text-stone-500 leading-relaxed">
-							Every agent task turns into a back-and-forth. You become the
-							interface between context and prompt
+							Every task shouldn&apos;t be a back-and-forth. Whirl provides the
+							context so agents can execute independently.
 						</p>
 					</motion.div>
 					<motion.div
@@ -581,11 +581,11 @@ function ProblemSection() {
 						className="p-6 rounded-xl border border-stone-200 bg-white"
 					>
 						<h3 className="text-lg font-semibold text-stone-900 mb-3">
-							Context isn&apos;t structured
+							Bridge the context gap
 						</h3>
 						<p className="text-stone-500 leading-relaxed">
-							Your product context is scattered across tools in formats AI
-							can&apos;t easily traverse
+							Stop manually feeding AI information. Whirl structures your
+							scattered docs and chats into a unified product brain.
 						</p>
 					</motion.div>
 				</motion.div>
@@ -599,30 +599,30 @@ function SolutionSection() {
 	const steps = [
 		{
 			number: "01",
-			title: "Context as a Filesystem",
+			title: "Unified Product Context",
 			description:
-				"Your specs, Slack decisions, and docs become a structured workspace—like a codebase for your product. Agents read context as fluently as they read code.",
+				"Your specs, Slack threads, and docs become a structured workspace. Agents read your product context as fluently as they read code.",
 			icon: Layers,
 		},
 		{
 			number: "02",
-			title: "Queue Up Work",
+			title: "Delegate with Confidence",
 			description:
-				"Break down what you want built into tasks. Add context, specs, constraints. Then hand it off—agents take it from here.",
+				"Break down features into tasks with full context and constraints. Hand them off to agents who understand the big picture.",
 			icon: MessageSquare,
 		},
 		{
 			number: "03",
-			title: "Agents Work While You Don't",
+			title: "Continuous 24/7 Shipping",
 			description:
-				"Close your laptop. Agents keep shipping through the night, the weekend, your vacation. No babysitting required.",
+				"Close your laptop. Agents keep working through the night and weekends. No hand-holding or constant prompting required.",
 			icon: Bot,
 		},
 		{
 			number: "04",
-			title: "Wake Up to Progress",
+			title: "Accelerated Momentum",
 			description:
-				"Morning coffee hits different when there's completed work waiting for review. Your downtime became productive time.",
+				"Wake up to completed work waiting for your review. Your downtime is no longer a dead zone for progress.",
 			icon: Zap,
 		},
 	];
@@ -717,16 +717,16 @@ function VisionSection() {
 						variants={fadeInUp}
 						className="text-3xl sm:text-4xl font-bold text-stone-900 mb-6 leading-tight"
 					>
-						Your product should build itself
+						The future of building is autonomous
 					</motion.h2>
 					<motion.p
 						variants={fadeInUp}
 						className="text-lg text-stone-500 leading-relaxed mb-12"
 					>
-						We believe the future of building software is autonomous agents that
-						truly understand your product. Not assistants that need constant
-						prompting—but teammates that can ship real work while you focus on
-						the important decisions.
+						We believe software should build itself. Our goal isn&apos;t just to
+						build another assistant, but to create autonomous teammates that
+						truly understand your product and can ship real work while you focus
+						on the big picture.
 					</motion.p>
 				</motion.div>
 			</div>
