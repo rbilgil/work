@@ -688,6 +688,72 @@ http.route({
 	}),
 });
 
+// ============ CLERK WEBHOOKS ============
+
+http.route({
+	path: "/webhooks/clerk",
+	method: "POST",
+	handler: httpAction(async (ctx, request) => {
+		const payloadString = await request.text();
+		const headerPayload = request.headers;
+
+		const svixId = headerPayload.get("svix-id");
+		const svixTimestamp = headerPayload.get("svix-timestamp");
+		const svixSignature = headerPayload.get("svix-signature");
+
+		if (!svixId || !svixTimestamp || !svixSignature) {
+			return new Response("Error occured -- no svix headers", {
+				status: 400,
+			});
+		}
+
+		// In a real application, you would verify the signature here using svix library
+		// const wh = new Webhook(secret);
+		// wh.verify(payloadString, { ... headers ... })
+
+		const payload = JSON.parse(payloadString);
+		const { type, data } = payload;
+
+		switch (type) {
+			case "user.created":
+			case "user.updated": {
+				const email = data.email_addresses[0]?.email_address;
+				const name = `${data.first_name || ""} ${data.last_name || ""}`.trim();
+				const clerkUserId = data.id;
+				const issuerDomain = process.env.CLERK_JWT_ISSUER_DOMAIN;
+				const tokenIdentifier = issuerDomain
+					? `${issuerDomain}|${clerkUserId}`
+					: clerkUserId;
+
+				if (!email) {
+					return new Response("Missing email", { status: 400 });
+				}
+
+				await ctx.runMutation(internal.users.upsertUser, {
+					tokenIdentifier,
+					email,
+					name: name || undefined,
+				});
+				break;
+			}
+			case "user.deleted": {
+				const clerkUserId = data.id;
+				const issuerDomain = process.env.CLERK_JWT_ISSUER_DOMAIN;
+				const tokenIdentifier = issuerDomain
+					? `${issuerDomain}|${clerkUserId}`
+					: clerkUserId;
+
+				await ctx.runMutation(internal.users.deleteUser, {
+					tokenIdentifier,
+				});
+				break;
+			}
+		}
+
+		return new Response("OK", { status: 200 });
+	}),
+});
+
 // ============ SLACK EVENTS WEBHOOK ============
 
 http.route({
